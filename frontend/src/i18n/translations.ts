@@ -213,7 +213,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
   uk: {
     appName: 'Edge-D.U.R.O.',
-    appDescription: 'Debian & Ubuntu Recipe Oven — Генерування образів ОС',
+    appDescription: 'Debian & Ubuntu Recipe Oven',
     loginTitle: 'Вхід адміністратора',
     loginUsername: "Ім'я користувача",
     loginPassword: 'Пароль',

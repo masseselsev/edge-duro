@@ -193,7 +193,7 @@ function AppContent() {
                   <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-bold text-xs uppercase tracking-wider">
                     {t('appName')}
                   </span>
-                  <span className="text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono font-bold">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono font-bold">
                     {appVersion}
                   </span>
                 </h1>

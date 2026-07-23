@@ -7,7 +7,11 @@ from database import get_db, setup_db_logging
 import models
 from version import VERSION
 
-# Routers will be attached as created
+# Routers
+from routers import users as users_router
+from routers import settings as settings_router
+from routers import health as health_router
+
 app = FastAPI(title="Edge-D.U.R.O. API", version=VERSION)
 
 app.add_middleware(
@@ -17,6 +21,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(users_router.router)
+app.include_router(settings_router.router)
+app.include_router(health_router.router)
+
 
 
 @app.on_event("startup")

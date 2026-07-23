@@ -19,7 +19,7 @@ Automated image-building factory of the Edge ecosystem. A web-based control plan
 | Service | Container Port | Host Port | Notes |
 |---------|---------------|-----------|-------|
 | **Frontend** | 3333 | `3333` | Web UI & Nginx API reverse proxy |
-| **Backend** | 8000 | `8000` | FastAPI REST & SSE endpoints |
+| **Backend** | 8000 | `8003` | FastAPI REST & SSE endpoints |
 | **PostgreSQL** | 5432 | `5433` | Standalone DB instance |
 | **Redis** | 6379 | `6380` | Task broker & PubSub log engine |
 
@@ -88,6 +88,9 @@ POSTGRES_PASSWORD=SetYourSecureDbPasswordHere
 POSTGRES_DB=duro_image_builder
 REDIS_URL=redis://redis:6379/0
 DATABASE_URL=postgresql://postgres:SetYourSecureDbPasswordHere@db:5432/duro_image_builder
+
+# Exposed Ports
+BACKEND_PORT=8003
 
 # Admin Authentication
 SUPERADMIN_USERNAME=admin

@@ -40,7 +40,22 @@ git clone https://github.com/masseselsev/edge-duro.git /opt/edge-duro
 cd /opt/edge-duro
 ```
 
-### Step 2: Configure Environment Variables & Host Storage Mount
+### Step 2: Prepare Host Storage Directory & Permissions
+
+Create the host data directory (e.g. `/data/duro` or `/mnt/nvme/duro_workspace`) and set non-root user permissions so Docker containers and system users can write build artifacts seamlessly:
+
+```bash
+# Create directory
+sudo mkdir -p /data/duro
+
+# Grant ownership to current non-root user
+sudo chown -R $USER:$USER /data/duro
+
+# Set standard write permissions
+sudo chmod -R 775 /data/duro
+```
+
+### Step 3: Configure Environment Variables & Generate JWT Key
 
 Create the `.env` configuration file:
 
@@ -65,15 +80,6 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 Copy the generated 64-character hexadecimal string into your `.env` file under `JWT_SECRET_KEY`.
 
-#### Configuring Host Workspace & Build Storage Mount (`DURO_HOST_DATA_PATH`)
-
-Because OS builds (`.raw.xz`, `.iso`) are large multi-gigabyte monolithic images, store them on a separate host directory, NVMe volume, or dedicated mount point (e.g. `/mnt/nvme/duro_workspace` or `duro-workspace` named Docker volume):
-
-```env
-# Host directory mount (e.g. /mnt/nvme/duro_workspace) or named volume (duro-workspace)
-DURO_HOST_DATA_PATH=/mnt/nvme/duro_workspace
-```
-
 #### Production `.env` Example
 
 ```env
@@ -88,12 +94,12 @@ SUPERADMIN_USERNAME=admin
 ADMIN_PASSWORD=SetYourSecureSuperadminPasswordHere
 JWT_SECRET_KEY=e8f9a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9
 
-# Workspace & Build Storage
-DURO_HOST_DATA_PATH=/mnt/nvme/duro_workspace
+# Host Workspace & Build Storage Mount Path
+DURO_HOST_DATA_PATH=/data/duro
 DURO_WORKSPACE_PATH=/opt/data/duro_workspace
 ```
 
-### Step 3: Launch Containers
+### Step 4: Launch Containers
 
 ```bash
 docker-compose up -d --build
@@ -105,7 +111,7 @@ Verify service health:
 docker-compose ps
 ```
 
-### Step 4: Access Web UI
+### Step 5: Access Web UI
 
 Navigate to `http://<your-server-ip>:3333` in your web browser.
 

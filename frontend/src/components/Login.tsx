@@ -25,9 +25,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      }
+
       if (!res.ok) {
-        throw new Error(data.detail || t('loginError'));
+        throw new Error(data.detail || `Server returned HTTP ${res.status}. Please check backend logs.`);
       }
 
       onLoginSuccess(data.user);

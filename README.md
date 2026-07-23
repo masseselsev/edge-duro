@@ -31,7 +31,7 @@ Automated image-building factory of the Edge ecosystem. A web-based control plan
 
 - **OS:** Debian 11/12, Ubuntu 22.04/24.04, or RHEL/Rocky 9 Linux server.
 - **Kernel / Capabilities:** Linux Kernel 5.15+ with loop device support enabled (`modprobe loop`).
-- **Software:** `git`, `docker`, and `docker-compose` (or `docker compose` plugin v2+).
+- **Software:** `git`, `docker`, and Docker Compose v2 (`docker compose` plugin).
 
 ### Step 1: Clone Repository
 
@@ -102,13 +102,13 @@ DURO_WORKSPACE_PATH=/opt/data/duro_workspace
 ### Step 4: Launch Containers
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 Verify service health:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 ### Step 5: Access Web UI

@@ -1,0 +1,106 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
+      POSTGRES_DB: ${POSTGRES_DB:-duro_image_builder}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+    restart: always
+    command: /app/entrypoint.sh
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:securepassword@db:5432/duro_image_builder}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      PYTHONPATH: /app
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-key-change-me-in-production}
+      DURO_WORKSPACE_PATH: ${DURO_WORKSPACE_PATH:-/opt/data/duro_workspace}
+    volumes:
+      - ./backend:/app
+      - duro-workspace:/opt/data/duro_workspace
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+    restart: always
+    privileged: true
+    command: celery -A tasks.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:securepassword@db:5432/duro_image_builder}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      PYTHONPATH: /app
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-key-change-me-in-production}
+      DURO_WORKSPACE_PATH: ${DURO_WORKSPACE_PATH:-/opt/data/duro_workspace}
+    volumes:
+      - ./backend:/app
+      - duro-workspace:/opt/data/duro_workspace
+    depends_on:
+      - db
+      - redis
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+    restart: always
+    command: celery -A tasks.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:securepassword@db:5432/duro_image_builder}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      PYTHONPATH: /app
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-super-secret-key-change-me-in-production}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+    restart: always
+    ports:
+      - "3333:3333"
+    volumes:
+      - frontend-build:/usr/share/nginx/html
+    depends_on:
+      - backend
+
+volumes:
+  pg-data:
+    name: edge-duro_pg-data
+  redis-data:
+    name: edge-duro_redis-data
+  duro-workspace:
+    name: edge-duro_workspace
+  frontend-build:
+    name: edge-duro_frontend-build

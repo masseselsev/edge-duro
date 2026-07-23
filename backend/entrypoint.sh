@@ -14,6 +14,8 @@ try:
     parsed = urlparse(db_url)
     host = parsed.hostname or 'db'
     port = parsed.port or 5432
+    if host == 'db':
+        port = 5432
 except Exception:
     host = 'db'
     port = 5432

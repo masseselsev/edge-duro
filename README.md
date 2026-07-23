@@ -40,7 +40,7 @@ git clone https://github.com/masseselsev/edge-duro.git /opt/edge-duro
 cd /opt/edge-duro
 ```
 
-### Step 2: Configure Environment Variables & Generate JWT Key
+### Step 2: Configure Environment Variables & Host Storage Mount
 
 Create the `.env` configuration file:
 
@@ -65,6 +65,15 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 Copy the generated 64-character hexadecimal string into your `.env` file under `JWT_SECRET_KEY`.
 
+#### Configuring Host Workspace & Build Storage Mount (`DURO_HOST_DATA_PATH`)
+
+Because OS builds (`.raw.xz`, `.iso`) are large multi-gigabyte monolithic images, store them on a separate host directory, NVMe volume, or dedicated mount point (e.g. `/mnt/nvme/duro_workspace` or `duro-workspace` named Docker volume):
+
+```env
+# Host directory mount (e.g. /mnt/nvme/duro_workspace) or named volume (duro-workspace)
+DURO_HOST_DATA_PATH=/mnt/nvme/duro_workspace
+```
+
 #### Production `.env` Example
 
 ```env
@@ -79,7 +88,8 @@ SUPERADMIN_USERNAME=admin
 ADMIN_PASSWORD=SetYourSecureSuperadminPasswordHere
 JWT_SECRET_KEY=e8f9a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9
 
-# Host Workspace Storage Path
+# Workspace & Build Storage
+DURO_HOST_DATA_PATH=/mnt/nvme/duro_workspace
 DURO_WORKSPACE_PATH=/opt/data/duro_workspace
 ```
 

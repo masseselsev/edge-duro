@@ -35,7 +35,7 @@ services:
       DURO_WORKSPACE_PATH: ${DURO_WORKSPACE_PATH:-/opt/data/duro_workspace}
     volumes:
       - ./backend:/app
-      - duro-workspace:/opt/data/duro_workspace
+      - ${DURO_HOST_DATA_PATH:-duro-workspace}:/opt/data/duro_workspace
     ports:
       - "8000:8000"
     depends_on:
@@ -59,7 +59,7 @@ services:
       DURO_WORKSPACE_PATH: ${DURO_WORKSPACE_PATH:-/opt/data/duro_workspace}
     volumes:
       - ./backend:/app
-      - duro-workspace:/opt/data/duro_workspace
+      - ${DURO_HOST_DATA_PATH:-duro-workspace}:/opt/data/duro_workspace
     depends_on:
       - db
       - redis

@@ -40,16 +40,32 @@ git clone https://github.com/masseselsev/edge-duro.git /opt/edge-duro
 cd /opt/edge-duro
 ```
 
-### Step 2: Configure Environment Variables
+### Step 2: Configure Environment Variables & Generate JWT Key
 
-Create and edit the `.env` configuration file:
+Create the `.env` configuration file:
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Set secure production values:
+#### Generating a Secure `JWT_SECRET_KEY`
+
+To generate a cryptographically strong 256-bit secret key for JWT session tokens, run either of the following commands:
+
+**Option A (OpenSSL):**
+```bash
+openssl rand -hex 32
+```
+
+**Option B (Python 3):**
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Copy the generated 64-character hexadecimal string into your `.env` file under `JWT_SECRET_KEY`.
+
+#### Production `.env` Example
 
 ```env
 POSTGRES_USER=postgres
@@ -61,7 +77,7 @@ DATABASE_URL=postgresql://postgres:SetYourSecureDbPasswordHere@db:5432/duro_imag
 # Admin Authentication
 SUPERADMIN_USERNAME=admin
 ADMIN_PASSWORD=SetYourSecureSuperadminPasswordHere
-JWT_SECRET_KEY=SetYourSecureRandomJWTSecretKeyHere
+JWT_SECRET_KEY=e8f9a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9
 
 # Host Workspace Storage Path
 DURO_WORKSPACE_PATH=/opt/data/duro_workspace

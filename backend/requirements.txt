@@ -1,0 +1,14 @@
+fastapi>=0.110.0
+python-multipart>=0.0.9
+uvicorn[standard]>=0.28.0
+sqlalchemy>=2.0.28
+psycopg2-binary>=2.9.10
+alembic>=1.13.1
+celery>=5.3.6
+redis>=5.0.3
+pydantic>=2.9.2
+pydantic-settings>=2.5.0
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
+httpx>=0.28.1
+sse-starlette>=1.6.5

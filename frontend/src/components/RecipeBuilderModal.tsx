@@ -38,7 +38,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const toggleFormat = (fmt: string) => {
     if (outputFormats.includes(fmt)) {
       if (outputFormats.length > 1) {
-        setOutputFormats(outputFormats.filter((f) => f !== fmt));
+        setOutputFormats(outputFormats.filter((f: string) => f !== fmt));
       }
     } else {
       setOutputFormats([...outputFormats, fmt]);
@@ -50,7 +50,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
     setSaving(true);
     setError('');
 
-    const parsedKeys = sshKeyInput.split('\n').map((k) => k.trim()).filter((k) => k.length > 0);
+    const parsedKeys = sshKeyInput.split('\n').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
 
     const payload = {
       name: name.trim(),
@@ -117,7 +117,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
     try {
       const res = await fetch(`/api/assets/${assetId}`, { method: 'DELETE' });
       if (res.ok) {
-        setAssets(assets.filter((a) => a.id !== assetId));
+        setAssets(assets.filter((a: any) => a.id !== assetId));
       }
     } catch (err) {
       console.error(err);

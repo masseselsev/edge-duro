@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+venv/
+.venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-data/
+
+# AI Config
+GEMINI.md
+
+# Superpowers
+.superpowers/
+docs/
+*.db
+.worktrees/
+
+# Celery Beat
+celerybeat-schedule*
+
+# Reports
+reports/
+
+.agents/
+scratch/
+
+# D.U.R.O. workspace artifacts
+duro_workspace/

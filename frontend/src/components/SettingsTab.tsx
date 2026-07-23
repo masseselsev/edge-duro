@@ -7,14 +7,32 @@ interface SettingsTabProps {
   onSettingsUpdated: (settings: any) => void;
 }
 
-const TIMEZONES = [
-  { label: 'Browser Local', value: 'Browser Local' },
-  { label: 'UTC', value: 'UTC' },
-  { label: 'Europe/Moscow', value: 'Europe/Moscow' },
-  { label: 'Europe/Kyiv', value: 'Europe/Kyiv' },
-  { label: 'Europe/London', value: 'Europe/London' },
-  { label: 'America/New_York', value: 'America/New_York' },
-];
+const getSystemTimezones = () => {
+  const defaults = [
+    'Browser Local',
+    'UTC',
+    'Europe/Moscow',
+    'Europe/Kyiv',
+    'Europe/London',
+    'America/New_York',
+    'America/Los_Angeles',
+    'Asia/Tokyo',
+  ];
+
+  let ianaList: string[] = [];
+  try {
+    if (typeof Intl !== 'undefined' && (Intl as any).supportedValuesOf) {
+      ianaList = (Intl as any).supportedValuesOf('timeZone');
+    }
+  } catch (err) {
+    ianaList = [];
+  }
+
+  const allTzs = Array.from(new Set(['Browser Local', 'UTC', ...ianaList, ...defaults]));
+  return allTzs.map((tz) => ({ label: tz, value: tz }));
+};
+
+const TIMEZONES = getSystemTimezones();
 
 export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
   const { t } = useTranslation();

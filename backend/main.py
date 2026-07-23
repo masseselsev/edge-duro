@@ -11,6 +11,10 @@ from version import VERSION
 from routers import users as users_router
 from routers import settings as settings_router
 from routers import health as health_router
+from routers import recipes as recipes_router
+from routers import builds as builds_router
+from routers import assets as assets_router
+from routers import repositories as repositories_router
 
 app = FastAPI(title="Edge-D.U.R.O. API", version=VERSION)
 
@@ -25,6 +29,11 @@ app.add_middleware(
 app.include_router(users_router.router)
 app.include_router(settings_router.router)
 app.include_router(health_router.router)
+app.include_router(recipes_router.router)
+app.include_router(builds_router.router)
+app.include_router(assets_router.router)
+app.include_router(repositories_router.router)
+
 
 
 

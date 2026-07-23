@@ -75,15 +75,16 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 animate-tab-in">
+    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-5 animate-tab-in">
+      {/* Header action bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-            <Flame size={22} />
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+            <Flame size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-zinc-50">{t('tabRecipes')}</h2>
-            <p className="text-xs text-zinc-400">Configure and execute custom Debian/Ubuntu OS image recipes</p>
+            <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('tabRecipes')}</h2>
+            <p className="text-[11px] text-zinc-400 font-medium">Configure and execute custom Debian/Ubuntu OS image recipes</p>
           </div>
         </div>
 
@@ -92,9 +93,9 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
             setActiveModalRecipe(null);
             setShowModal(true);
           }}
-          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all flex items-center gap-2 cursor-pointer self-start md:self-auto"
+          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/10 transition-all flex items-center gap-1.5 cursor-pointer self-start md:self-auto"
         >
-          <Plus size={16} />
+          <Plus size={15} />
           <span>{t('createRecipe')}</span>
         </button>
       </div>

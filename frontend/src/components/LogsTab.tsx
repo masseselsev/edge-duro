@@ -31,15 +31,15 @@ export default function LogsTab() {
   }, [subTab]);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6 animate-tab-in">
+    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-5 animate-tab-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-            <Terminal size={22} />
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+            <Terminal size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-zinc-50">{t('tabLogs')}</h2>
-            <p className="text-xs text-zinc-400">System application events & administrative audit trails</p>
+            <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('tabLogs')}</h2>
+            <p className="text-[11px] text-zinc-400 font-medium">System application events & administrative audit trails</p>
           </div>
         </div>
 

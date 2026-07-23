@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from database import get_db, setup_db_logging
+from database import get_db, setup_db_logging, engine
 import models
 from version import VERSION
 
@@ -39,6 +39,12 @@ app.include_router(repositories_router.router)
 
 @app.on_event("startup")
 def startup_db_init():
+    try:
+        models.Base.metadata.create_all(bind=engine)
+        print("Database tables verified/created.")
+    except Exception as e:
+        print(f"Error creating database tables: {e}")
+
     try:
         setup_db_logging()
     except Exception as e:

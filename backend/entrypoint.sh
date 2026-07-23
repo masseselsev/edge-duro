@@ -1,15 +1,23 @@
 #!/bin/sh
 
-# Wait for PostgreSQL to be ready using a python socket connection check
+# Wait for PostgreSQL to be ready using python socket connection check
 echo "Waiting for database to be ready..."
 python3 -c "
 import socket
 import time
 import os
 import sys
+from urllib.parse import urlparse
 
-host = 'db'
-port = 5433
+db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:securepassword@db:5432/duro_image_builder')
+try:
+    parsed = urlparse(db_url)
+    host = parsed.hostname or 'db'
+    port = parsed.port or 5432
+except Exception:
+    host = 'db'
+    port = 5432
+
 print(f'Checking connection to {host}:{port}...')
 while True:
     try:

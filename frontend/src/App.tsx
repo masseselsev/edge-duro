@@ -355,9 +355,9 @@ function AppContent() {
       {/* Profile Modal */}
       {showProfileModal && currentUser && (
         <ProfileModal
-          user={currentUser}
+          currentUser={currentUser}
           onClose={() => setShowProfileModal(false)}
-          onProfileUpdated={(updated) => setCurrentUser(updated)}
+          onUpdateSuccess={(updatedUser: any) => setCurrentUser(updatedUser)}
         />
       )}
 

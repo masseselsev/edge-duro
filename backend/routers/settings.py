@@ -34,8 +34,10 @@ def update_settings(
 
     settings.server_name = payload.server_name
     settings.timezone = payload.timezone
-    settings.language = payload.language
-    settings.duro_workspace_path = payload.duro_workspace_path
+    if payload.language:
+        settings.language = payload.language
+    if payload.duro_workspace_path:
+        settings.duro_workspace_path = payload.duro_workspace_path
 
     db.commit()
     db.refresh(settings)

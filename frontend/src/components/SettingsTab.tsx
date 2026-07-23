@@ -17,13 +17,11 @@ const TIMEZONES = [
 ];
 
 export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
-  const { t, setLanguage } = useTranslation();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [serverName, setServerName] = useState('Edge-D.U.R.O.');
   const [timezone, setTimezone] = useState('Browser Local');
-  const [language, setLangState] = useState('en');
-  const [workspacePath, setWorkspacePath] = useState('/opt/data/duro_workspace');
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -33,8 +31,6 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
         if (data) {
           setServerName(data.server_name || 'Edge-D.U.R.O.');
           setTimezone(data.timezone || 'Browser Local');
-          setLangState(data.language || 'en');
-          setWorkspacePath(data.duro_workspace_path || '/opt/data/duro_workspace');
         }
       })
       .catch((err) => console.error(err))
@@ -53,8 +49,6 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
         body: JSON.stringify({
           server_name: serverName,
           timezone,
-          language,
-          duro_workspace_path: workspacePath,
         }),
       });
 
@@ -64,7 +58,6 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
       }
 
       onSettingsUpdated(data);
-      setLanguage(language as any);
       setMsg('Settings saved successfully!');
     } catch (err: any) {
       setMsg(`Error: ${err.message}`);
@@ -119,30 +112,6 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
               options={TIMEZONES}
               value={timezone}
               onChange={setTimezone}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pl-1">{t('language')}</label>
-            <SearchableSelect
-              options={[
-                { label: 'English', value: 'en' },
-                { label: 'Русский', value: 'ru' },
-                { label: 'Українська', value: 'uk' },
-              ]}
-              value={language}
-              onChange={setLangState}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pl-1">{t('workspacePath')}</label>
-            <input
-              type="text"
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none font-mono text-xs"
-              required
             />
           </div>
         </div>

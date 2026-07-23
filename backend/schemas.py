@@ -27,8 +27,8 @@ class SettingsBase(BaseModel):
     @classmethod
     def validate_server_name(cls, v: str) -> str:
         import re
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError("Server name must contain only letters, numbers, hyphens, and underscores.")
+        if not re.match(r'^[a-zA-Z0-9_\-\. ]+$', v):
+            raise ValueError("Server name must contain only letters, numbers, hyphens, dots, and underscores.")
         return v
 
 

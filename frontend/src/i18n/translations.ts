@@ -4,7 +4,7 @@ export const translations: Record<Language, Record<string, string>> = {
   en: {
     // App Header & Branding
     appName: 'Edge-D.U.R.O.',
-    appDescription: 'Debian & Ubuntu Recipe Oven — OS Image Generator',
+    appDescription: 'Debian & Ubuntu Recipe Oven',
     loginTitle: 'Administrator Sign In',
     loginUsername: 'Username',
     loginPassword: 'Password',
@@ -112,7 +112,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
   ru: {
     appName: 'Edge-D.U.R.O.',
-    appDescription: 'Debian & Ubuntu Recipe Oven — Генерирование образов ОС',
+    appDescription: 'Debian & Ubuntu Recipe Oven',
     loginTitle: 'Вход администратора',
     loginUsername: 'Имя пользователя',
     loginPassword: 'Пароль',

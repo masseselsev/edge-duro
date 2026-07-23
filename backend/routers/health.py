@@ -30,6 +30,40 @@ def get_system_health(db: Session = Depends(get_db)):
     return {"warnings": warnings}
 
 
+@router.get("/system/metrics")
+def get_system_metrics():
+    cpu_usage = 0.0
+    ram_usage = 0.0
+    try:
+        import psutil
+        cpu_usage = psutil.cpu_percent(interval=None)
+        ram_usage = psutil.virtual_memory().percent
+    except Exception:
+        try:
+            with open("/proc/meminfo", "r") as f:
+                lines = f.readlines()
+                mem_total = 0
+                mem_free = 0
+                for line in lines:
+                    if line.startswith("MemTotal:"):
+                        mem_total = int(line.split()[1])
+                    elif line.startswith("MemAvailable:"):
+                        mem_available = int(line.split()[1])
+                if mem_total > 0:
+                    ram_usage = round((1 - (mem_available / mem_total)) * 100, 1)
+        except Exception:
+            pass
+
+    return {
+        "cpu_usage": cpu_usage,
+        "ram_usage": ram_usage,
+        "rx_speed": 0,
+        "tx_speed": 0,
+        "rx_percent": 0.0,
+        "tx_percent": 0.0,
+    }
+
+
 @router.get("/logs/system", response_model=List[schemas.SystemLogResponse])
 def get_system_logs(
     limit: int = Query(default=100, ge=1, le=1000),

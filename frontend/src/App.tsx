@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Flame, History, Settings as Gear, Terminal, Sun, Moon, User, Loader2, BookOpen } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Flame, History, Settings as Gear, Terminal, Sun, Moon, User, Loader2, BookOpen, ArrowDown, ArrowUp } from 'lucide-react';
 import RecipesTab from './components/RecipesTab';
 import BuildsTab from './components/BuildsTab';
 import SettingsTab from './components/SettingsTab';
@@ -14,7 +14,7 @@ import { TranslationProvider, useTranslation } from './context/TranslationContex
 type Tab = 'recipes' | 'builds' | 'settings' | 'logs';
 
 function AppContent() {
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const saved = localStorage.getItem('activeTab') as Tab | null;
     const valid: Tab[] = ['recipes', 'builds', 'settings', 'logs'];
@@ -34,8 +34,13 @@ function AppContent() {
   const [healthWarnings, setHealthWarnings] = useState<any[]>([]);
 
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
   const [activeStreamBuildId, setActiveStreamBuildId] = useState<string | null>(null);
   const [activeStreamRecipeName, setActiveStreamRecipeName] = useState<string>('');
+
+  const [metrics, setMetrics] = useState<{ cpu_usage: number; ram_usage: number } | null>(null);
 
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
@@ -49,6 +54,36 @@ function AppContent() {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Click outside to close profile dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Poll metrics
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchMetrics = async () => {
+      try {
+        const res = await fetch('/api/system/metrics');
+        if (res.ok) {
+          const data = await res.json();
+          setMetrics(data);
+        }
+      } catch (err) {
+        console.error('Metrics fetch error:', err);
+      }
+    };
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 3000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   // Auth check and initial metadata loading
   useEffect(() => {
@@ -96,6 +131,7 @@ function AppContent() {
     } finally {
       setIsAuthenticated(false);
       setCurrentUser(null);
+      setProfileDropdownOpen(false);
     }
   };
 
@@ -140,14 +176,17 @@ function AppContent() {
 
   return (
     <div className="min-h-full flex flex-col font-sans pb-16">
-      {/* Global Header */}
+      {/* Global Header matching Edge-B.R.O. exact layout */}
       <header className="bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-3 space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            {/* Brand Logo */}
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg shadow-lg flex items-center justify-center w-10 h-10">
-                <Flame className="w-6 h-6 text-amber-400" />
+          {/* Row 1: Logo/Title | Server Metrics | Actions */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* Left: Brand Identity */}
+            <div className="flex-1 flex items-center gap-3 justify-center md:justify-start">
+              <div className="relative p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg shadow-lg flex items-center justify-center w-10 h-10">
+                <Flame className="w-6 h-6 text-amber-400 filter drop-shadow-[0_0_4px_rgba(245,158,11,0.6)]" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
               </div>
               <div>
                 <h1 className="text-base font-bold text-zinc-50 tracking-tight leading-none flex items-center gap-2">
@@ -158,52 +197,105 @@ function AppContent() {
                     {appVersion}
                   </span>
                 </h1>
-                <p className="text-[9px] text-zinc-500 font-semibold mt-1 uppercase tracking-wider">
+                <p className="text-[9px] text-zinc-500 font-semibold mt-1.5 uppercase tracking-wider">
                   {t('appDescription')}
                 </p>
               </div>
             </div>
 
-            {/* Actions & Controls */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
-                title="Toggle Theme"
-              >
-                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-              </button>
+            {/* Center: Server Metrics Widget */}
+            {metrics && (
+              <div className="flex-shrink-0 flex items-center gap-3 bg-zinc-950/40 border border-zinc-800/60 rounded-xl px-3 py-1.5 shadow-inner">
+                <div className="flex items-center gap-1.5" title="CPU Utilization">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold font-mono">CPU</span>
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400">
+                    {metrics.cpu_usage.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="w-px h-3 bg-zinc-800" />
+                
+                <div className="flex items-center gap-1.5" title="RAM Utilization">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold font-mono">RAM</span>
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400">
+                    {metrics.ram_usage.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="w-px h-3 bg-zinc-800" />
+                
+                <div className="flex items-center gap-1.5">
+                  <ArrowDown size={12} className="text-zinc-600" />
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold font-mono">RX</span>
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400">0 B/s</span>
+                  <span className="text-[9px] font-mono text-emerald-400">(0.0%)</span>
+                </div>
+                <div className="w-px h-3 bg-zinc-800" />
+                
+                <div className="flex items-center gap-1.5">
+                  <ArrowUp size={12} className="text-zinc-600" />
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold font-mono">TX</span>
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400">0 B/s</span>
+                  <span className="text-[9px] font-mono text-emerald-400">(0.0%)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Right: Actions + User Profile Dropdown */}
+            <div className="flex-1 flex flex-wrap items-center justify-center md:justify-end gap-3">
+              {currentUser && (
+                <div className="relative" ref={profileDropdownRef}>
+                  <button
+                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold transition-all cursor-pointer outline-none"
+                  >
+                    <User size={13} className="text-zinc-400" />
+                    <span>{currentUser.name || currentUser.username}</span>
+                    <svg className={`w-3 h-3 text-zinc-500 transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {profileDropdownOpen && (
+                    <div className="absolute right-0 mt-1.5 w-44 rounded-lg bg-zinc-900 border border-zinc-800 shadow-2xl p-1 z-50 origin-top-right animate-dropdown-in">
+                      <button
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold rounded-md text-zinc-300 hover:text-zinc-50 hover:bg-zinc-800 transition-colors cursor-pointer"
+                      >
+                        {t('editProfile') || 'Edit Profile'}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold rounded-md text-rose-400 hover:bg-rose-950/20 transition-colors border-t border-zinc-800 mt-1 pt-2 cursor-pointer"
+                      >
+                        {t('logout')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <LanguageSelector />
 
-              {currentUser && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowProfileModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold transition-all cursor-pointer"
-                  >
-                    <User size={13} className="text-amber-400" />
-                    <span>{currentUser.name || currentUser.username}</span>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-xs text-rose-400 font-bold transition-all cursor-pointer"
-                  >
-                    {t('logout')}
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-1.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer flex items-center justify-center"
+                title="Toggle Theme"
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
             </div>
           </div>
 
-          {/* Navigation Bar */}
-          <div className="pt-2 border-t border-zinc-800/60">
-            <nav className="flex items-center gap-2">
+          {/* Row 2: Full Width Dark Pill Navigation Bar (1-to-1 match with edge-bro) */}
+          <div className="border-t border-zinc-800/60 pt-2 flex justify-center w-full">
+            <nav className="w-full flex flex-wrap items-center justify-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800/60">
               <button
                 onClick={() => setActiveTab('recipes')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'recipes'
-                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -214,7 +306,7 @@ function AppContent() {
                 onClick={() => setActiveTab('builds')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'builds'
-                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -225,7 +317,7 @@ function AppContent() {
                 onClick={() => setActiveTab('logs')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'logs'
-                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -236,7 +328,7 @@ function AppContent() {
                 onClick={() => setActiveTab('settings')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'settings'
-                    ? 'bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -261,15 +353,15 @@ function AppContent() {
       />
 
       {/* Profile Modal */}
-      {showProfileModal && (
+      {showProfileModal && currentUser && (
         <ProfileModal
-          currentUser={currentUser}
+          user={currentUser}
           onClose={() => setShowProfileModal(false)}
-          onUpdateSuccess={(updated) => setCurrentUser(updated)}
+          onProfileUpdated={(updated) => setCurrentUser(updated)}
         />
       )}
 
-      {/* SSE Log Stream Modal */}
+      {/* Build Log Overlay Stream Modal */}
       {activeStreamBuildId && (
         <BuildLogStream
           buildId={activeStreamBuildId}

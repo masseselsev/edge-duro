@@ -13,6 +13,22 @@ import { TranslationProvider, useTranslation } from './context/TranslationContex
 
 type Tab = 'recipes' | 'builds' | 'settings' | 'logs';
 
+interface SystemMetrics {
+  cpu_usage: number;
+  ram_usage: number;
+  rx_speed: number;
+  tx_speed: number;
+  rx_percent: number;
+  tx_percent: number;
+}
+
+const formatSpeed = (bytesPerSec: number): string => {
+  if (!bytesPerSec || bytesPerSec < 1024) return `${(bytesPerSec || 0).toFixed(0)} B/s`;
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`;
+  if (bytesPerSec < 1024 * 1024 * 1024) return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+  return `${(bytesPerSec / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
+};
+
 function AppContent() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -40,7 +56,7 @@ function AppContent() {
   const [activeStreamBuildId, setActiveStreamBuildId] = useState<string | null>(null);
   const [activeStreamRecipeName, setActiveStreamRecipeName] = useState<string>('');
 
-  const [metrics, setMetrics] = useState<{ cpu_usage: number; ram_usage: number } | null>(null);
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
 
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
@@ -66,7 +82,7 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Poll metrics
+  // Poll metrics every 3 seconds
   useEffect(() => {
     if (!isAuthenticated) return;
     const fetchMetrics = async () => {
@@ -223,18 +239,22 @@ function AppContent() {
                 <div className="w-px h-2.5 bg-zinc-800" />
                 
                 <div className="flex items-center gap-1">
-                  <ArrowDown size={11} className="text-zinc-600" />
+                  <ArrowDown size={11} className={metrics.rx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
                   <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold font-mono">RX</span>
-                  <span className="text-[10px] font-mono font-semibold text-emerald-400">0 B/s</span>
-                  <span className="text-[8.5px] font-mono text-emerald-400">(0.0%)</span>
+                  <span className="text-[10px] font-mono font-semibold text-emerald-400">
+                    {formatSpeed(metrics.rx_speed)}
+                  </span>
+                  <span className="text-[8.5px] font-mono text-emerald-400">({metrics.rx_percent.toFixed(1)}%)</span>
                 </div>
                 <div className="w-px h-2.5 bg-zinc-800" />
                 
                 <div className="flex items-center gap-1">
-                  <ArrowUp size={11} className="text-zinc-600" />
+                  <ArrowUp size={11} className={metrics.tx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
                   <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold font-mono">TX</span>
-                  <span className="text-[10px] font-mono font-semibold text-emerald-400">0 B/s</span>
-                  <span className="text-[8.5px] font-mono text-emerald-400">(0.0%)</span>
+                  <span className="text-[10px] font-mono font-semibold text-emerald-400">
+                    {formatSpeed(metrics.tx_speed)}
+                  </span>
+                  <span className="text-[8.5px] font-mono text-emerald-400">({metrics.tx_percent.toFixed(1)}%)</span>
                 </div>
               </div>
             )}

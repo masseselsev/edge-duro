@@ -8,20 +8,28 @@ from models import Build, Recipe
 from celery_app import celery_app
 
 
-def extract_edge_base_version(ws_path: str, target_raw: str = None) -> str:
-    """Extract Version of mandatory 'edge-base' Debian package from rootfs dpkg status database."""
-    # 1. Check if version file was saved in workspace
+def extract_edge_base_version(ws_path: str, target_raw: str = None, log_text: str = None) -> str:
+    """Extract Version of mandatory 'edge-base' Debian package from multiple sources."""
+    # 1. Check if version file was saved in workspace during stdout streaming
     ver_file = os.path.join(ws_path, "edge_base_version.txt")
     if os.path.exists(ver_file):
         try:
             with open(ver_file, "r") as f:
                 v = f.read().strip()
-                if v:
+                if v and len(v) >= 3 and v[0].isdigit():
                     return v
         except Exception:
             pass
 
-    # 2. Check direct status paths in ws_path
+    # 2. Parse build log text history
+    if log_text:
+        match = re.search(r'edge-base(?:[:\w\-]+)?\s*\(?([0-9a-zA-Z\.\+\~\-]+)\)?', log_text)
+        if match:
+            v_str = match.group(1).strip()
+            if len(v_str) >= 3 and v_str[0].isdigit():
+                return v_str
+
+    # 3. Check direct status paths in ws_path
     possible_status_paths = [
         os.path.join(ws_path, "root", "var", "lib", "dpkg", "status"),
         os.path.join(ws_path, "buildroot", "var", "lib", "dpkg", "status"),
@@ -38,8 +46,8 @@ def extract_edge_base_version(ws_path: str, target_raw: str = None) -> str:
             except Exception:
                 pass
 
-    # 3. Extract rootfs partition from target_raw using sfdisk + dd + debugfs
-    if target_raw and os.path.exists(target_raw):
+    # 4. Extract rootfs partition from target_raw using sfdisk + dd + debugfs
+    if target_raw and os.path.exists(target_raw) and not target_raw.endswith(".xz"):
         try:
             sf_res = subprocess.run(["sfdisk", "-d", target_raw], capture_output=True, text=True)
             if sf_res.returncode == 0:
@@ -50,7 +58,7 @@ def extract_edge_base_version(ws_path: str, target_raw: str = None) -> str:
                         if start_match and size_match:
                             start_sector = int(start_match.group(1))
                             sector_count = int(size_match.group(1))
-                            if start_sector > 0 and sector_count > 200000:
+                            if start_sector > 0 and sector_count > 50000:
                                 root_part_img = os.path.join(ws_path, "rootfs_part.img")
                                 dd_cmd = [
                                     "dd", f"if={target_raw}", f"of={root_part_img}",
@@ -62,7 +70,7 @@ def extract_edge_base_version(ws_path: str, target_raw: str = None) -> str:
                                     dbg_res = subprocess.run(["debugfs", "-R", "cat var/lib/dpkg/status", root_part_img], capture_output=True, text=True)
                                     if os.path.exists(root_part_img):
                                         os.remove(root_part_img)
-                                    if dbg_res.returncode == 0 and "Package: edge-base" in dbg_res.stdout:
+                                    if dbg_res.returncode == 0 and "edge-base" in dbg_res.stdout:
                                         match = re.search(r'Package:\s*edge-base\n(?:[^\n]+\n)*?Version:\s*([^\n]+)', dbg_res.stdout)
                                         if match:
                                             return match.group(1).strip()
@@ -97,7 +105,8 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         target_raw = raw_candidates[0] if raw_candidates else None
 
         # 1. Enforce mandatory edge-base package presence
-        edge_base_ver = extract_edge_base_version(ws_path, target_raw)
+        log_content = build.log_output if build else None
+        edge_base_ver = extract_edge_base_version(ws_path, target_raw, log_content)
         if not edge_base_ver:
             error_msg = "[ISO ERROR] Mandatory package 'edge-base' is missing from rootfs dpkg database! Aborting ISO generation."
             log_to_task(build_id, error_msg, status="FAILED")

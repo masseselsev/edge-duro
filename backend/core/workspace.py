@@ -83,10 +83,37 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
         f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
 
-    # 3.5. Prepare script (runs apt-get update inside buildroot before package installation)
+    # 3.5. Prepare script (runs inside buildroot before package installation)
+    rel = recipe.release or "bookworm"
+    prepare_sources = [
+        "#!/bin/bash",
+        "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
+        'CACHE_DIR="/opt/data/duro_workspace/cache/apt"',
+        'mkdir -p "$CACHE_DIR"',
+        "mkdir -p /etc/apt/sources.list.d",
+        "cat << 'EOF' > /etc/apt/sources.list.d/custom.list",
+        f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/stable {rel} main",
+        f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/testing {rel} main"
+    ]
+
+    if recipe.repositories and isinstance(recipe.repositories, list):
+        for repo in recipe.repositories:
+            if isinstance(repo, dict) and repo.get("url"):
+                url = repo.get("url")
+                suite = repo.get("suite") or rel
+                comp = repo.get("components") or "main"
+                prepare_sources.append(f"deb [trusted=yes] {url} {suite} {comp}")
+
+    prepare_sources.extend([
+        "EOF",
+        "if command -v apt-get >/dev/null 2>&1; then",
+        '  apt-get -o Dir::Cache::Archives="$CACHE_DIR" update --allow-insecure-repositories --allow-unauthenticated || true',
+        "fi"
+    ])
+
     prepare_path = os.path.join(workspace_path, "mkosi.prepare.chroot")
     with open(prepare_path, "w") as f:
-        f.write("#!/bin/bash\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH\nCACHE_DIR=\"/opt/data/duro_workspace/cache/apt\"\nmkdir -p \"$CACHE_DIR\"\nif command -v apt-get >/dev/null 2>&1; then\n  apt-get -o Dir::Cache::Archives=\"$CACHE_DIR\" update --allow-insecure-repositories || apt-get -o Dir::Cache::Archives=\"$CACHE_DIR\" update || true\nfi\n")
+        f.write("\n".join(prepare_sources) + "\n")
     os.chmod(prepare_path, 0o755)
 
     # 4. Post-install script hook & timezone setup

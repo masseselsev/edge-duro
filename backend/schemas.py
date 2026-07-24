@@ -97,9 +97,11 @@ class RecipeBase(BaseModel):
     hostname: str = Field(default="edge-node")
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
+    kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
     raw_mkosi_conf: Optional[str] = None
     raw_preseed_cfg: Optional[str] = None
     raw_postinst: Optional[str] = None
+    raw_firstboot: Optional[str] = None
 
 
 class RecipeCreate(RecipeBase):

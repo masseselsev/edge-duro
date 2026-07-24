@@ -30,7 +30,7 @@ def prepare_workspace(recipe_id: int) -> str:
 
 def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_path: str):
     """
-    Populates mkosi.extra/ overlay tree with SSH keys, custom APT repositories, assets, and scripts.
+    Populates mkosi.extra/ overlay tree with SSH keys, custom APT repositories, assets, postinst, firstboot, and preseed files.
     """
     extra_dir = os.path.join(workspace_path, "mkosi.extra")
 
@@ -75,6 +75,48 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         with open(postinst_path, "w") as f:
             f.write("#!/bin/bash\nset -e\n" + recipe.raw_postinst + "\n")
         os.chmod(postinst_path, 0o755)
+
+    # 5. Firstboot script & systemd service
+    if recipe.raw_firstboot and recipe.raw_firstboot.strip():
+        fb_bin_dir = os.path.join(extra_dir, "opt", "edge", "bin")
+        os.makedirs(fb_bin_dir, exist_ok=True)
+        fb_script_path = os.path.join(fb_bin_dir, "firstboot.sh")
+        with open(fb_script_path, "w") as f:
+            f.write(recipe.raw_firstboot.strip() + "\n")
+        os.chmod(fb_script_path, 0o755)
+
+        systemd_dir = os.path.join(extra_dir, "etc", "systemd", "system")
+        os.makedirs(systemd_dir, exist_ok=True)
+        fb_svc_path = os.path.join(systemd_dir, "edge-firstboot.service")
+        with open(fb_svc_path, "w") as f:
+            f.write("""[Unit]
+Description=Edge Firstboot Initialization Service
+ConditionFirstBoot=yes
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/edge/bin/firstboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+""")
+
+        wants_dir = os.path.join(systemd_dir, "multi-user.target.wants")
+        os.makedirs(wants_dir, exist_ok=True)
+        symlink_path = os.path.join(wants_dir, "edge-firstboot.service")
+        if not os.path.exists(symlink_path):
+            try:
+                os.symlink("../edge-firstboot.service", symlink_path)
+            except Exception:
+                pass
+
+    # 6. Debian Preseed file
+    if recipe.raw_preseed_cfg and recipe.raw_preseed_cfg.strip():
+        preseed_path = os.path.join(workspace_path, "preseed.cfg")
+        with open(preseed_path, "w") as f:
+            f.write(recipe.raw_preseed_cfg.strip() + "\n")
 
 
 def cleanup_workspace(recipe_id: int):

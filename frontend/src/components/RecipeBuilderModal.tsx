@@ -30,6 +30,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
   const [rawPreseedCfg, setRawPreseedCfg] = useState(recipe?.raw_preseed_cfg || '');
   const [rawPostinst, setRawPostinst] = useState(recipe?.raw_postinst || '');
+  const [rawFirstboot, setRawFirstboot] = useState(recipe?.raw_firstboot || '');
+  const [kernelParams, setKernelParams] = useState(recipe?.kernel_params || 'ipv6.disable=1 nohz=off');
 
   const [assets, setAssets] = useState<any[]>(recipe?.assets || []);
   const [saving, setSaving] = useState(false);
@@ -63,9 +65,11 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       repositories,
       hostname: hostname.trim() || 'edge-node',
       ssh_keys: parsedKeys,
+      kernel_params: kernelParams.trim() || null,
       raw_mkosi_conf: rawMkosiConf || null,
       raw_preseed_cfg: rawPreseedCfg || null,
       raw_postinst: rawPostinst || null,
+      raw_firstboot: rawFirstboot || null,
     };
 
     try {
@@ -243,13 +247,29 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             </div>
           </div>
 
+          {/* Kernel Parameters (CMDLINE) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              Kernel Parameters (CMDLINE)
+            </label>
+            <input
+              type="text"
+              value={kernelParams}
+              onChange={(e) => setKernelParams(e.target.value)}
+              placeholder="e.g. ipv6.disable=1 nohz=off"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
+            />
+          </div>
+
           <AdvancedEditor
             rawMkosiConf={rawMkosiConf}
             rawPreseedCfg={rawPreseedCfg}
             rawPostinst={rawPostinst}
+            rawFirstboot={rawFirstboot}
             onChangeMkosi={setRawMkosiConf}
             onChangePreseed={setRawPreseedCfg}
             onChangePostinst={setRawPostinst}
+            onChangeFirstboot={setRawFirstboot}
           />
         </form>
 

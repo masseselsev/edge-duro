@@ -54,6 +54,7 @@ def startup_db_init():
         db = next(get_db())
         upgrade_settings(db)
         seed_superadmin(db)
+        seed_default_debian12_recipe(db)
         clear_stale_builds(db)
         db.close()
     except Exception as e:
@@ -84,6 +85,45 @@ def seed_superadmin(db: Session):
         db.add(db_user)
         db.commit()
         print(f"Superadmin user '{username}' seeded successfully.")
+
+
+def seed_default_debian12_recipe(db: Session):
+    """
+    Seeds default Debian 12 Bookworm base recipe if no recipe with this name exists.
+    """
+    existing = db.query(models.Recipe).filter(models.Recipe.name == "Debian 12 Bookworm (Edge Base)").first()
+    if not existing:
+        recipe = models.Recipe(
+            name="Debian 12 Bookworm (Edge Base)",
+            description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, systemd firstboot, and core utilities.",
+            distribution="debian",
+            release="bookworm",
+            architecture="amd64",
+            output_formats=["raw_xz", "iso"],
+            packages=[
+                "systemd", "systemd-sysv", "dbus", "iproute2", "curl", "wget",
+                "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
+                "linux-image-amd64", "net-tools", "sudo", "ca-certificates"
+            ],
+            repositories=[
+                {
+                    "name": "debian-main",
+                    "url": "http://deb.debian.org/debian",
+                    "suite": "bookworm",
+                    "components": "main contrib non-free non-free-firmware",
+                    "gpg_key_filename": "debian-archive-bookworm.gpg"
+                }
+            ],
+            hostname="edge-node",
+            ssh_keys=[],
+            kernel_params="ipv6.disable=1 nohz=off",
+            raw_mkosi_conf="",
+            raw_postinst="update-locale LANG=C.UTF-8\nrm -f /etc/machine-id\n",
+            raw_firstboot="#!/bin/sh\nlog() {\n  echo \"$(date --rfc-3339=seconds) [firstboot] $1\" >> /var/log/edge/firstboot.log\n}\nlog \"EXEC\"\nsystemd-machine-id-setup\nlog \"DONE\"\n"
+        )
+        db.add(recipe)
+        db.commit()
+        print("Default Debian 12 Bookworm base recipe seeded successfully.")
 
 
 def upgrade_settings(db: Session):

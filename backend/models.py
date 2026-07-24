@@ -55,9 +55,11 @@ class Recipe(Base):
     network_config = Column(JSON, nullable=True)
     ssh_keys = Column(JSON, nullable=False, default=list)
 
+    kernel_params = Column(String, nullable=True)
     raw_mkosi_conf = Column(Text, nullable=True)
     raw_preseed_cfg = Column(Text, nullable=True)
     raw_postinst = Column(Text, nullable=True)
+    raw_firstboot = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

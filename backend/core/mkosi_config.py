@@ -56,15 +56,6 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         f"Release={recipe.release}",
         f"Architecture={mkosi_arch}",
         f"Repositories={components}",
-    ]
-
-    # Add RepositoryUrl lines for initial bootstrap stage from recipe.repositories
-    if recipe.repositories and isinstance(recipe.repositories, list):
-        for repo in recipe.repositories:
-            if isinstance(repo, dict) and repo.get("url"):
-                config_lines.append(f"RepositoryUrl={repo.get('url')}")
-
-    config_lines.extend([
         "",
         "[Build]",
         "CacheDirectory=/opt/data/duro_workspace/cache",
@@ -79,7 +70,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "[Content]",
         f"Packages=\n    {packages_formatted}",
         "Autologin=yes",
-    ])
+    ]
 
     if recipe.kernel_params and recipe.kernel_params.strip():
         config_lines.append(f"KernelCommandLine={recipe.kernel_params.strip()}")

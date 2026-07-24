@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Flame, X, Loader2, Check } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BaseImageSelector from './BaseImageSelector';
@@ -7,12 +8,39 @@ import AptRepoManager, { AptRepo } from './AptRepoManager';
 import AssetInjector from './AssetInjector';
 import ScriptManager from './ScriptManager';
 import AdvancedEditor from './AdvancedEditor';
+import { SearchableSelect } from './SearchableSelect';
 
 interface RecipeBuilderModalProps {
   recipe?: any;
   onClose: () => void;
   onSaveSuccess: (recipe: any) => void;
 }
+
+const getSystemTimezones = () => {
+  const defaults = [
+    'UTC',
+    'Europe/Moscow',
+    'Europe/Kyiv',
+    'Europe/London',
+    'America/New_York',
+    'America/Los_Angeles',
+    'Asia/Tokyo',
+  ];
+
+  let ianaList: string[] = [];
+  try {
+    if (typeof Intl !== 'undefined' && (Intl as any).supportedValuesOf) {
+      ianaList = (Intl as any).supportedValuesOf('timeZone');
+    }
+  } catch (err) {
+    ianaList = [];
+  }
+
+  const allTzs = Array.from(new Set(['UTC', ...ianaList, ...defaults]));
+  return allTzs.map((tz) => ({ label: tz, value: tz }));
+};
+
+const TIMEZONES = getSystemTimezones();
 
 export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: RecipeBuilderModalProps) {
   const { t } = useTranslation();
@@ -25,6 +53,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [packages, setPackages] = useState<string[]>(recipe?.packages || []);
   const [repositories, setRepositories] = useState<AptRepo[]>(recipe?.repositories || []);
   const [hostname, setHostname] = useState(recipe?.hostname || 'edge-node');
+  const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
@@ -64,6 +93,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       packages,
       repositories,
       hostname: hostname.trim() || 'edge-node',
+      timezone: timezone || 'UTC',
       ssh_keys: parsedKeys,
       kernel_params: kernelParams.trim() || null,
       raw_mkosi_conf: rawMkosiConf || null,
@@ -128,8 +158,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-4xl max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         
         {/* Header */}
@@ -140,7 +170,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             </div>
             <div>
               <h2 className="text-base font-bold text-zinc-50">{recipe ? t('editRecipe') : t('createRecipe')}</h2>
-              <p className="text-xs text-zinc-400">Configure distribution, packages, custom mirrors & build parameters</p>
+              <p className="text-xs text-zinc-400">Configure distribution, packages, target OS timezone & build parameters</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer">
@@ -224,7 +254,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           <AssetInjector recipeId={recipe?.id} assets={assets} onUpload={handleAssetUpload} onDelete={handleAssetDelete} />
           <ScriptManager postinstScript={rawPostinst} onChange={setRawPostinst} />
 
-          {/* Hostname & SSH Keys */}
+          {/* Hostname & Target OS Timezone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('hostname')}</label>
@@ -236,15 +266,25 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshKeys')}</label>
-              <textarea
-                rows={3}
-                value={sshKeyInput}
-                onChange={(e) => setSshKeyInput(e.target.value)}
-                placeholder={t('sshKeyPlaceholder')}
-                className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Target OS Timezone</label>
+              <SearchableSelect
+                options={TIMEZONES}
+                value={timezone}
+                onChange={setTimezone}
               />
             </div>
+          </div>
+
+          {/* SSH Keys */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshKeys')}</label>
+            <textarea
+              rows={3}
+              value={sshKeyInput}
+              onChange={(e) => setSshKeyInput(e.target.value)}
+              placeholder={t('sshKeyPlaceholder')}
+              className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
+            />
           </div>
 
           {/* Kernel Parameters (CMDLINE) */}
@@ -293,6 +333,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

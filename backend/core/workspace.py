@@ -69,11 +69,19 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
 
-    # 4. Post-install script hook
-    if recipe.raw_postinst:
+    # 4. Post-install script hook & timezone setup
+    postinst_commands = []
+    if recipe.timezone and recipe.timezone.strip():
+        tz = recipe.timezone.strip()
+        postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime && echo \"{tz}\" > /etc/timezone")
+
+    if recipe.raw_postinst and recipe.raw_postinst.strip():
+        postinst_commands.append(recipe.raw_postinst.strip())
+
+    if postinst_commands:
         postinst_path = os.path.join(workspace_path, "mkosi.postinst.chroot")
         with open(postinst_path, "w") as f:
-            f.write("#!/bin/bash\nset -e\n" + recipe.raw_postinst + "\n")
+            f.write("#!/bin/bash\nset -e\n" + "\n".join(postinst_commands) + "\n")
         os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service

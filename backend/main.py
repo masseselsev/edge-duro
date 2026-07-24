@@ -68,6 +68,7 @@ def run_migrations_safety(db: Session):
     try:
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS kernel_params VARCHAR;"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS raw_firstboot TEXT;"))
+        db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS timezone VARCHAR DEFAULT 'UTC';"))
         db.commit()
     except Exception as e:
         print(f"Safety migration warning: {e}")

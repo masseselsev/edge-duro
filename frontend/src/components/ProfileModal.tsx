@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, User } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
@@ -29,16 +30,11 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
     };
 
     if (password) {
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters long');
-        setSubmitting(false);
-        return;
-      }
       payload.password = password;
     }
 
     try {
-      const res = await fetch('/api/users/profile', {
+      const res = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -52,14 +48,14 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
       onUpdateSuccess(data);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'An error occurred while updating profile');
+      setError(err.message || 'An error occurred');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl space-y-4 animate-modal-in">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
           <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">

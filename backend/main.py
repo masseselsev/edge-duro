@@ -119,14 +119,14 @@ def seed_default_debian12_recipe(db: Session):
         },
         {
             "name": "edge-stable",
-            "url": "http://edge.vitcompany.com/repo/bookworm/stable",
+            "url": "https://edge.vitcompany.com/repo/bookworm/stable",
             "suite": "bookworm",
             "components": "main",
             "gpg_key_filename": "edge-archive-keyring.gpg"
         },
         {
             "name": "edge-testing",
-            "url": "http://edge.vitcompany.com/repo/bookworm/testing",
+            "url": "https://edge.vitcompany.com/repo/bookworm/testing",
             "suite": "bookworm",
             "components": "main",
             "gpg_key_filename": "edge-archive-keyring.gpg"
@@ -175,6 +175,23 @@ log "EXEC"
 systemd-machine-id-setup
 log "DONE"
 """
+
+    # Upgrade any existing recipes to use HTTPS for vitcompany URLs
+    all_recipes = db.query(models.Recipe).all()
+    for r in all_recipes:
+        if r.repositories and isinstance(r.repositories, list):
+            updated_repos = []
+            modified = False
+            for repo in r.repositories:
+                if isinstance(repo, dict):
+                    url = repo.get("url", "")
+                    if url.startswith("http://edge.vitcompany.com"):
+                        repo["url"] = url.replace("http://edge.vitcompany.com", "https://edge.vitcompany.com")
+                        modified = True
+                updated_repos.append(repo)
+            if modified:
+                r.repositories = updated_repos
+                db.commit()
 
     existing = db.query(models.Recipe).filter(models.Recipe.name == "Debian 12 Bookworm (Edge Base)").first()
     if not existing:

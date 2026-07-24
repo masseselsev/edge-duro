@@ -107,7 +107,7 @@ def seed_superadmin(db: Session):
 
 def seed_default_debian12_recipe(db: Session):
     """
-    Seeds/updates default Debian 12 Bookworm base recipe with official Edge vitcompany repositories.
+    Seeds/updates default Debian 12 Bookworm base recipe with official Edge vitcompany repositories and Edge packages.
     """
     repos_spec = [
         {
@@ -131,6 +131,14 @@ def seed_default_debian12_recipe(db: Session):
             "components": "main",
             "gpg_key_filename": "edge-archive-keyring.gpg"
         }
+    ]
+
+    edge_base_pkgs = [
+        "systemd", "systemd-sysv", "systemd-boot", "dbus", "iproute2", "curl", "wget",
+        "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
+        "linux-image-amd64", "net-tools", "sudo", "ca-certificates", "locales",
+        "edge-base", "edge-target-tools", "edge-python3-psuctl", "acpi-support-base",
+        "dbus-user-session", "python3-requests"
     ]
 
     preseed_content = """# Debian Installer Preseed Configuration for Edge Debian 12
@@ -172,16 +180,12 @@ log "DONE"
     if not existing:
         recipe = models.Recipe(
             name="Debian 12 Bookworm (Edge Base)",
-            description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, edge.vitcompany.com APT repositories, systemd firstboot, and core utilities.",
+            description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, edge.vitcompany.com APT repositories, systemd firstboot, and core Edge packages.",
             distribution="debian",
             release="bookworm",
             architecture="amd64",
             output_formats=["raw_xz", "iso"],
-            packages=[
-                "systemd", "systemd-sysv", "systemd-boot", "dbus", "iproute2", "curl", "wget",
-                "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
-                "linux-image-amd64", "net-tools", "sudo", "ca-certificates", "locales"
-            ],
+            packages=edge_base_pkgs,
             repositories=repos_spec,
             hostname="edge-node",
             ssh_keys=[],
@@ -195,14 +199,18 @@ log "DONE"
         db.commit()
         print("Default Debian 12 Bookworm base recipe seeded successfully.")
     else:
-        # Update repositories & scripts on existing template if missing vitcompany repos
+        current_pkgs = list(existing.packages or [])
+        for ep in ["edge-base", "edge-target-tools", "edge-python3-psuctl", "acpi-support-base", "dbus-user-session", "python3-requests"]:
+            if ep not in current_pkgs:
+                current_pkgs.append(ep)
+        existing.packages = current_pkgs
         existing.repositories = repos_spec
         existing.raw_postinst = postinst_content
         existing.raw_preseed_cfg = preseed_content
         existing.raw_firstboot = firstboot_content
         existing.kernel_params = "ipv6.disable=1 nohz=off"
         db.commit()
-        print("Updated existing Debian 12 Bookworm base recipe with edge.vitcompany.com repositories.")
+        print("Updated existing Debian 12 Bookworm base recipe with Edge packages and vitcompany repositories.")
 
 
 def upgrade_settings(db: Session):

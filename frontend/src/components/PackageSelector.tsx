@@ -14,6 +14,15 @@ const EDGE_SUGGESTIONS = [
   'edge-timekeeper',
   'edge-zabbix-agent',
   'edge-target-kaskad4',
+  'edge-target-puma',
+  'edge-target-skif',
+  'edge-target-uralan',
+  'edge-target-wspaces7',
+  'edge-target-wspaces9',
+  'edge-target-trc',
+  'edge-target-roadeye3',
+  'edge-target-edges',
+  'edge-target-edges4',
   'edge-mvs',
   'acpi-support-base',
   'dbus-user-session',
@@ -142,7 +151,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
         {/* Quick Edge Suggestions */}
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           <span className="text-[10px] text-cyan-400/80 font-bold uppercase tracking-wider mr-1">Edge Suite:</span>
-          {EDGE_SUGGESTIONS.filter((s) => !packages.includes(s)).slice(0, 6).map((s) => (
+          {EDGE_SUGGESTIONS.filter((s) => !packages.includes(s)).map((s) => (
             <button
               key={s}
               type="button"

@@ -9,8 +9,9 @@ interface BaseImageSelectorProps {
 }
 
 const IMAGES = [
-  { distro: 'debian', release: 'bookworm', name: 'Debian 12 (Bookworm)', tag: 'LTS / Stable' },
-  { distro: 'debian', release: 'trixie', name: 'Debian 13 (Trixie)', tag: 'Testing' },
+  { distro: 'debian', release: 'bookworm', name: 'Debian 12 (Bookworm)', tag: 'LTS' },
+  { distro: 'debian', release: 'trixie', name: 'Debian 13 (Trixie)', tag: 'Stable' },
+  { distro: 'debian', release: 'forky', name: 'Debian 14 (Forky)', tag: 'Testing' },
   { distro: 'ubuntu', release: 'resolute', name: 'Ubuntu 26.04 (Resolute Raccoon)', tag: 'LTS' },
   { distro: 'ubuntu', release: 'noble', name: 'Ubuntu 24.04 (Noble Numbat)', tag: 'LTS' },
   { distro: 'ubuntu', release: 'jammy', name: 'Ubuntu 22.04 (Jammy Jellyfish)', tag: 'LTS' },

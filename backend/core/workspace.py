@@ -25,6 +25,7 @@ def prepare_workspace(recipe_id: int) -> str:
     for d in subdirs:
         os.makedirs(os.path.join(recipe_ws, d), exist_ok=True)
 
+    os.makedirs(os.path.join(base_dir, "cache", "apt"), exist_ok=True)
     return recipe_ws
 
 
@@ -76,10 +77,16 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
 
+    # 3.4. Persistent APT Package Cache configuration
+    apt_conf_dir = os.path.join(extra_dir, "etc", "apt", "apt.conf.d")
+    os.makedirs(apt_conf_dir, exist_ok=True)
+    with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
+        f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
+
     # 3.5. Prepare script (runs apt-get update inside buildroot before package installation)
     prepare_path = os.path.join(workspace_path, "mkosi.prepare.chroot")
     with open(prepare_path, "w") as f:
-        f.write("#!/bin/bash\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH\nif command -v apt-get >/dev/null 2>&1; then\n  apt-get update --allow-insecure-repositories || apt-get update || true\nfi\n")
+        f.write("#!/bin/bash\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH\nCACHE_DIR=\"/opt/data/duro_workspace/cache/apt\"\nmkdir -p \"$CACHE_DIR\"\nif command -v apt-get >/dev/null 2>&1; then\n  apt-get -o Dir::Cache::Archives=\"$CACHE_DIR\" update --allow-insecure-repositories || apt-get -o Dir::Cache::Archives=\"$CACHE_DIR\" update || true\nfi\n")
     os.chmod(prepare_path, 0o755)
 
     # 4. Post-install script hook & timezone setup

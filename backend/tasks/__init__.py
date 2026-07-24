@@ -46,7 +46,7 @@ def log_to_task(task_id: str, message: str, status: str = None) -> None:
 
     # Publish to Redis PubSub channel
     try:
-        redis_client.publish(f"build:{task_id}", message)
+        redis_client.publish(f"build:{task_id}", log_line)
     except Exception as e:
         logger.error(f"Error publishing to Redis channel build:{task_id}: {e}")
 

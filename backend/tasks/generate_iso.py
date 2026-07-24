@@ -112,11 +112,11 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             log_to_task(build_id, error_msg, status="FAILED")
             return
 
-        # 2. Strict Naming Rule: edge_{EDGE_BASE_VERSION}_{ARCH}-{RELEASE}.iso
+        # 2. Strict Naming Rule: edge_{EDGE_BASE_VERSION}_{ARCH}-{RELEASE}-auto.iso
         arch = (recipe.architecture if recipe and recipe.architecture else "amd64").lower()
         rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
 
-        iso_filename = f"edge_{edge_base_ver}_{arch}-{rel}.iso"
+        iso_filename = f"edge_{edge_base_ver}_{arch}-{rel}-auto.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
         log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")

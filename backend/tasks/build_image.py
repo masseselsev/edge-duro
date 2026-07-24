@@ -162,13 +162,9 @@ def build_image_task(self, build_id: str, recipe_id: int):
         outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
         os.makedirs(outputs_dir, exist_ok=True)
 
-        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        base_name = recipe.name.lower().replace(' ', '_')
-        raw_xz_filename = f"{base_name}_{timestamp_str}.raw.xz"
-        final_raw_xz_path = os.path.join(outputs_dir, raw_xz_filename)
-
         src_output = os.path.join(ws_path, "output")
         uncompressed_raw_path = None
+        target_raw_file = None
 
         if os.path.exists(src_output) and os.listdir(src_output):
             all_files = [os.path.join(src_output, f) for f in os.listdir(src_output)]
@@ -180,7 +176,27 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
             disk_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
             target_raw_file = disk_files[0]
-            
+
+        # Extract edge-base version for unified RAW.XZ naming scheme
+        edge_base_ver = None
+        try:
+            from tasks.generate_iso import extract_edge_base_version
+            edge_base_ver = extract_edge_base_version(ws_path, target_raw_file)
+        except Exception:
+            pass
+
+        arch = (recipe.architecture if recipe and recipe.architecture else "amd64").lower()
+        rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
+
+        if edge_base_ver:
+            raw_xz_filename = f"edge_{edge_base_ver}_{arch}-{rel}-auto.raw.xz"
+        else:
+            timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            raw_xz_filename = f"edge_{arch}-{rel}-auto_{timestamp_str}.raw.xz"
+
+        final_raw_xz_path = os.path.join(outputs_dir, raw_xz_filename)
+
+        if target_raw_file:
             if not target_raw_file.endswith(".xz"):
                 uncompressed_raw_path = target_raw_file
                 log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({os.path.getsize(target_raw_file)} bytes) into {raw_xz_filename}...")

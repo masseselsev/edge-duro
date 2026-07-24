@@ -11,7 +11,7 @@ from celery_app import celery_app
 def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
     from tasks import log_to_task
 
-    log_to_task(build_id, "[ISO] Starting native systemd bootable ISO image generation via mkosi...")
+    log_to_task(build_id, "[ISO] Starting native bootable ISO image generation via mkosi...")
 
     db = SessionLocal()
     try:
@@ -27,25 +27,39 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
         mkosi_bin = shutil.which("mkosi")
-        if mkosi_bin and os.path.exists(ws_path):
+        conf_path = os.path.join(ws_path, "mkosi.conf")
+
+        if mkosi_bin and os.path.exists(ws_path) and os.path.exists(conf_path):
+            with open(conf_path, "r") as f:
+                original_conf = f.read()
+
+            # Temporarily configure Format=iso in mkosi.conf
+            iso_conf = original_conf.replace("Format=disk", "Format=iso")
+            with open(conf_path, "w") as f:
+                f.write(iso_conf)
+
             src_output = os.path.join(ws_path, "output")
             shutil.rmtree(src_output, ignore_errors=True)
 
-            cmd = ["mkosi", "--directory", ws_path, "--format=iso", "--force", "build"]
+            cmd = ["mkosi", "--directory", ws_path, "--force", "build"]
             log_to_task(build_id, f"[ISO EXEC] {' '.join(cmd)}")
 
-            res = subprocess.run(cmd, capture_output=True, text=True, cwd=ws_path)
-            if res.returncode == 0 and os.path.exists(src_output) and os.listdir(src_output):
-                iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output) if f.endswith(".iso")]
-                if not iso_files:
-                    iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output)]
-                iso_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
-                shutil.copy2(iso_files[0], final_iso_path)
-            else:
-                log_to_task(build_id, f"[ISO WARNING] mkosi --format=iso output code {res.returncode}: {res.stderr[:200]}")
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, cwd=ws_path)
+                if res.returncode == 0 and os.path.exists(src_output) and os.listdir(src_output):
+                    iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output) if f.endswith(".iso")]
+                    if not iso_files:
+                        iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output)]
+                    iso_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
+                    shutil.copy2(iso_files[0], final_iso_path)
+                else:
+                    log_to_task(build_id, f"[ISO WARNING] mkosi ISO build code {res.returncode}: {res.stderr[:200]}")
+            finally:
+                # Restore original mkosi.conf
+                with open(conf_path, "w") as f:
+                    f.write(original_conf)
 
         if not os.path.exists(final_iso_path):
-            # Fallback stub if ISO generation unavailable
             log_to_task(build_id, "[ISO WARNING] Creating fallback ISO artifact...")
             with open(final_iso_path, "wb") as f:
                 f.write(b"DURO_BOOTABLE_ISO_STUB\n")

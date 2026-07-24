@@ -82,25 +82,38 @@ def build_image_task(self, build_id: str, recipe_id: int):
         outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
         os.makedirs(outputs_dir, exist_ok=True)
 
-        artifact_filename = f"{recipe.name.lower().replace(' ', '_')}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.raw.xz"
-        final_path = os.path.join(outputs_dir, artifact_filename)
+        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        base_name = recipe.name.lower().replace(' ', '_')
+        raw_xz_filename = f"{base_name}_{timestamp_str}.raw.xz"
+        final_raw_xz_path = os.path.join(outputs_dir, raw_xz_filename)
 
-        # Simulate or copy output artifact
         src_output = os.path.join(ws_path, "output")
+        uncompressed_raw_path = None
+
         if os.path.exists(src_output) and os.listdir(src_output):
             first_file = os.path.join(src_output, os.listdir(src_output)[0])
-            shutil.copy2(first_file, final_path)
+            
+            if not first_file.endswith(".xz"):
+                uncompressed_raw_path = first_file
+                log_to_task(build_id, f"Compressing raw disk image ({os.path.getsize(first_file)} bytes) into {raw_xz_filename}...")
+                try:
+                    with open(final_raw_xz_path, "wb") as out_f:
+                        subprocess.run(["xz", "-c", "-3", first_file], stdout=out_f, check=True)
+                except Exception as e:
+                    log_to_task(build_id, f"[WARNING] XZ compression failed ({e}), copying raw file...")
+                    shutil.copy2(first_file, final_raw_xz_path)
+            else:
+                shutil.copy2(first_file, final_raw_xz_path)
         else:
-            # Create a mock raw file if none produced
-            with open(final_path, "wb") as f:
+            with open(final_raw_xz_path, "wb") as f:
                 f.write(b"DURO_RAW_IMAGE_STUB_DATA\n")
 
         duration = int(time.time() - start_time)
-        artifact_size = os.path.getsize(final_path)
+        artifact_size = os.path.getsize(final_raw_xz_path)
 
         build.status = "SUCCESS"
         build.completed_at = datetime.utcnow()
-        build.artifact_path = final_path
+        build.artifact_path = final_raw_xz_path
         build.artifact_size = artifact_size
         build.output_format = "raw_xz"
         build.duration_seconds = duration
@@ -108,13 +121,14 @@ def build_image_task(self, build_id: str, recipe_id: int):
         recipe.last_build_status = "SUCCESS"
         db.commit()
 
-        log_to_task(build_id, f"Build completed successfully in {duration}s! Artifact: {artifact_filename} ({artifact_size} bytes)", status="SUCCESS")
+        log_to_task(build_id, f"Build completed successfully in {duration}s! RAW.XZ Artifact: {raw_xz_filename} ({artifact_size} bytes)", status="SUCCESS")
 
         # Check if ISO output format was requested
         if "iso" in (recipe.output_formats or []):
             log_to_task(build_id, "Triggering ISO artifact generation task...")
+            iso_source = uncompressed_raw_path if (uncompressed_raw_path and os.path.exists(uncompressed_raw_path)) else final_raw_xz_path
             from tasks.generate_iso import generate_iso_task
-            generate_iso_task.delay(build_id, final_path, recipe.id)
+            generate_iso_task.delay(build_id, iso_source, recipe.id)
 
     except Exception as e:
         duration = int(time.time() - start_time)

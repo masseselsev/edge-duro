@@ -12,7 +12,14 @@ def generate_iso_task(build_id: str, raw_image_path: str, recipe_id: int):
 
     log_to_task(build_id, "[ISO] Starting ISO bootable image generation via xorriso...")
 
-    iso_path = raw_image_path.replace(".raw.xz", ".iso").replace(".raw", ".iso")
+    outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
+    os.makedirs(outputs_dir, exist_ok=True)
+
+    iso_filename = os.path.basename(raw_image_path).replace(".raw.xz", ".iso").replace(".raw", ".iso")
+    if not iso_filename.endswith(".iso"):
+        iso_filename += ".iso"
+
+    iso_path = os.path.join(outputs_dir, iso_filename)
     xorriso_bin = shutil.which("xorriso")
 
     if not xorriso_bin:
@@ -32,7 +39,8 @@ def generate_iso_task(build_id: str, raw_image_path: str, recipe_id: int):
             if res.returncode != 0:
                 log_to_task(build_id, f"[ISO ERROR] xorriso failed: {res.stderr}")
             else:
-                log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {os.path.basename(iso_path)}")
+                iso_size_mb = os.path.getsize(iso_path) / (1024 * 1024)
+                log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {os.path.basename(iso_path)} ({iso_size_mb:.1f} MB)")
         except Exception as e:
             log_to_task(build_id, f"[ISO ERROR] Failed executing xorriso: {e}")
 

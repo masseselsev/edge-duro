@@ -103,6 +103,15 @@ def build_image_task(self, build_id: str, recipe_id: int):
                     if not clean_line:
                         continue
 
+                    if "edge-base" in clean_line:
+                        eb_match = re.search(r'edge-base[^\(]*\(([^)]+)\)', clean_line)
+                        if eb_match:
+                            try:
+                                with open(os.path.join(ws_path, "edge_base_version.txt"), "w") as f:
+                                    f.write(eb_match.group(1).strip())
+                            except Exception:
+                                pass
+
                     pct_match = re.search(r'(\d+)%', clean_line)
                     if pct_match:
                         pct = int(pct_match.group(1))

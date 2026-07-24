@@ -67,7 +67,7 @@ export default function BuildsTab() {
         {loading && builds.length === 0 ? (
           <div className="flex items-center justify-center p-12 text-zinc-400">
             <Loader2 className="animate-spin mr-2" size={20} />
-            <span>Loading build history...</span>
+            <span>{t('loadingBuildHistory')}</span>
           </div>
         ) : builds.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 text-sm">

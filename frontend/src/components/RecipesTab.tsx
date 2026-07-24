@@ -115,7 +115,7 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
           </div>
           <div>
             <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('tabRecipes')}</h2>
-            <p className="text-[11px] text-zinc-400 font-medium">Configure and execute custom Debian/Ubuntu OS image recipes</p>
+            <p className="text-[11px] text-zinc-400 font-medium">{t('recipesSubtitle')}</p>
           </div>
         </div>
 
@@ -134,7 +134,7 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
       {loading ? (
         <div className="flex items-center justify-center p-12 text-zinc-400">
           <Loader2 className="animate-spin mr-2" size={20} />
-          <span>Loading image recipes...</span>
+          <span>{t('loadingBuildHistory')}</span>
         </div>
       ) : recipes.length === 0 ? (
         <div className="p-12 text-center bg-zinc-900 border border-zinc-800 rounded-3xl space-y-4">
@@ -167,7 +167,7 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                         )}
                       </div>
                       <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">
-                        {recipe.description || 'No description provided.'}
+                        {recipe.description || t('noDescription')}
                       </p>
                     </div>
                     <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">

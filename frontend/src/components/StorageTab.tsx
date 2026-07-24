@@ -188,7 +188,7 @@ export default function StorageTab() {
       {/* Search Bar & Location Directory Hint */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/50 p-3 px-4 border border-zinc-800/80 rounded-2xl">
         <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 w-full sm:w-auto overflow-x-auto">
-          <span className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">Path:</span>
+          <span className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">{t('pathLabel')}</span>
           <code className="text-amber-400 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
             {summary?.outputs_dir || '/opt/data/duro_workspace/outputs'}
           </code>
@@ -198,7 +198,7 @@ export default function StorageTab() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by filename..."
+          placeholder={t('filterByFilename')}
           className="w-full sm:w-64 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
         />
       </div>
@@ -208,7 +208,7 @@ export default function StorageTab() {
         {loading && artifacts.length === 0 ? (
           <div className="flex items-center justify-center p-12 text-zinc-400">
             <Loader2 className="animate-spin mr-2" size={20} />
-            <span>Scanning storage directory...</span>
+            <span>{t('scanningStorage')}</span>
           </div>
         ) : filteredArtifacts.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 text-sm">
@@ -232,10 +232,10 @@ export default function StorageTab() {
                       )}
                     </button>
                   </th>
-                  <th className="py-3 px-4">Filename</th>
-                  <th className="py-3 px-4">Format</th>
-                  <th className="py-3 px-4">File Size</th>
-                  <th className="py-3 px-4">Last Modified</th>
+                  <th className="py-3 px-4">{t('filenameHeader')}</th>
+                  <th className="py-3 px-4">{t('formatHeader')}</th>
+                  <th className="py-3 px-4">{t('fileSizeHeader')}</th>
+                  <th className="py-3 px-4">{t('lastModifiedHeader')}</th>
                   <th className="py-3 px-4 text-right">{t('actions')}</th>
                 </tr>
               </thead>
@@ -304,7 +304,7 @@ export default function StorageTab() {
                             title="Download artifact file"
                           >
                             <Download size={13} />
-                            <span>Download</span>
+                            <span>{t('download')}</span>
                           </a>
 
                           <button

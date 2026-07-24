@@ -4,7 +4,8 @@ from models import Recipe
 
 def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     """
-    Generates mkosi.conf configuration for systemd image builder.
+    Generates mkosi.conf configuration for systemd image builder and
+    injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
     """
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
     if "systemd-boot" not in pkgs:
@@ -28,6 +29,31 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         components = "main restricted universe multiverse"
     else:
         components = "main"
+
+    # Inject APT sources list into mkosi.extra tree
+    extra_apt_dir = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "sources.list.d")
+    os.makedirs(extra_apt_dir, exist_ok=True)
+
+    sources_lines = []
+    rel = recipe.release or "bookworm"
+
+    # 1. Edge Vitcompany corporate APT repositories
+    if (recipe.distribution or "").lower() == "debian":
+        sources_lines.append(f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/stable {rel} main")
+        sources_lines.append(f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/testing {rel} main")
+
+    # 2. Custom APT repositories configured in Recipe UI
+    if recipe.repositories and isinstance(recipe.repositories, list):
+        for repo in recipe.repositories:
+            if isinstance(repo, dict) and repo.get("url"):
+                url = repo.get("url")
+                suite = repo.get("suite") or rel
+                comp = repo.get("components") or "main"
+                sources_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
+
+    if sources_lines:
+        with open(os.path.join(extra_apt_dir, "custom.list"), "w") as f:
+            f.write("\n".join(sources_lines) + "\n")
 
     config_lines = [
         "[Distribution]",

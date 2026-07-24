@@ -55,14 +55,8 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     fetch(`/api/builds/${buildId}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.log_output) {
-          const freshLogs = data.log_output.split('\n').filter((l: string) => l.length > 0);
-          setLogs((prev) => {
-            if (updateLogs || freshLogs.length > prev.length) {
-              return freshLogs;
-            }
-            return prev;
-          });
+        if (data.log_output && updateLogs) {
+          setLogs(data.log_output.split('\n').filter((l: string) => l.length > 0));
         }
         if (data.status) {
           setStatus(data.status);

@@ -104,7 +104,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   }, [buildId]);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    logEndRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [logs]);
 
   return createPortal(

@@ -88,9 +88,9 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     firstboot_lines = ["#!/bin/bash", "set -e"]
 
     if recipe.hostname_from_netif:
-        base_hn = recipe.hostname or "edge-node"
+        base_hn = (recipe.hostname or "edge-node").lower().strip()
         firstboot_lines.append(f"""
-# Auto-configure hostname based on active network interface MAC
+# Auto-configure hostname based on active network interface MAC (strictly lowercase)
 IFACE=$(ip -4 route show default 2>/dev/null | awk '/default/ {{print $5}}' | head -n 1)
 if [ -z "$IFACE" ]; then
   IFACE=$(ip -o link show 2>/dev/null | awk -F': ' '$2 != "lo" {{print $2; exit}}')
@@ -98,7 +98,8 @@ fi
 if [ -n "$IFACE" ]; then
   MAC=$(cat /sys/class/net/$IFACE/address 2>/dev/null | tr -d ':' | tr '[:upper:]' '[:lower:]' | tail -c 7)
   if [ -n "$MAC" ]; then
-    DYNAMIC_HN="{base_hn}-$MAC"
+    BASE_PREFIX=$(echo "{base_hn}" | tr '[:upper:]' '[:lower:]')
+    DYNAMIC_HN="${{BASE_PREFIX}}-${{MAC}}"
     echo "Setting hostname to $DYNAMIC_HN (interface: $IFACE)"
     hostnamectl set-hostname "$DYNAMIC_HN" 2>/dev/null || echo "$DYNAMIC_HN" > /etc/hostname
     if [ -f /etc/hosts ]; then

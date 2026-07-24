@@ -137,9 +137,8 @@ def build_image_task(self, build_id: str, recipe_id: int):
         # Check if ISO output format was requested
         if "iso" in (recipe.output_formats or []):
             log_to_task(build_id, "Triggering ISO artifact generation task...")
-            iso_source = uncompressed_raw_path if (uncompressed_raw_path and os.path.exists(uncompressed_raw_path)) else final_raw_xz_path
             from tasks.generate_iso import generate_iso_task
-            generate_iso_task.delay(build_id, iso_source, recipe.id)
+            generate_iso_task.delay(build_id, ws_path, recipe.id)
 
     except Exception as e:
         duration = int(time.time() - start_time)

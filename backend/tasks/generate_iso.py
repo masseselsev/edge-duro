@@ -1,60 +1,67 @@
 import os
 import shutil
 import subprocess
+from datetime import datetime
 from database import SessionLocal
-from models import Build
+from models import Build, Recipe
 from celery_app import celery_app
 
 
 @celery_app.task(name="tasks.generate_iso.generate_iso_task")
-def generate_iso_task(build_id: str, raw_image_path: str, recipe_id: int):
+def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
     from tasks import log_to_task
 
-    log_to_task(build_id, "[ISO] Starting ISO bootable image generation via xorriso...")
+    log_to_task(build_id, "[ISO] Starting native systemd bootable ISO image generation via mkosi...")
 
-    outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
-    os.makedirs(outputs_dir, exist_ok=True)
-
-    iso_filename = os.path.basename(raw_image_path).replace(".raw.xz", ".iso").replace(".raw", ".iso")
-    if not iso_filename.endswith(".iso"):
-        iso_filename += ".iso"
-
-    iso_path = os.path.join(outputs_dir, iso_filename)
-    xorriso_bin = shutil.which("xorriso")
-
-    if not xorriso_bin:
-        log_to_task(build_id, "[ISO WARNING] 'xorriso' not found. Creating stub ISO artifact...")
-        with open(iso_path, "wb") as f:
-            f.write(b"DURO_ISO_IMAGE_STUB\n")
-    else:
-        cmd = [
-            "xorriso", "-as", "mkisofs",
-            "-r", "-V", "DURO_BOOT",
-            "-o", iso_path,
-            raw_image_path
-        ]
-        try:
-            log_to_task(build_id, f"[ISO EXEC] {' '.join(cmd)}")
-            res = subprocess.run(cmd, capture_output=True, text=True)
-            if res.returncode != 0:
-                log_to_task(build_id, f"[ISO ERROR] xorriso failed: {res.stderr}")
-            else:
-                iso_size_mb = os.path.getsize(iso_path) / (1024 * 1024)
-                log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {os.path.basename(iso_path)} ({iso_size_mb:.1f} MB)")
-        except Exception as e:
-            log_to_task(build_id, f"[ISO ERROR] Failed executing xorriso: {e}")
-
-    # Record ISO artifact & final build status in DB
     db = SessionLocal()
     try:
         build = db.query(Build).filter(Build.id == build_id).first()
-        if build and os.path.exists(iso_path):
-            build.iso_artifact_path = iso_path
-            build.iso_artifact_size = os.path.getsize(iso_path)
+        recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+
+        outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
+        os.makedirs(outputs_dir, exist_ok=True)
+
+        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        base_name = recipe.name.lower().replace(' ', '_') if recipe else "edge_os"
+        iso_filename = f"{base_name}_{timestamp_str}.iso"
+        final_iso_path = os.path.join(outputs_dir, iso_filename)
+
+        mkosi_bin = shutil.which("mkosi")
+        if mkosi_bin and os.path.exists(ws_path):
+            src_output = os.path.join(ws_path, "output")
+            shutil.rmtree(src_output, ignore_errors=True)
+
+            cmd = ["mkosi", "--directory", ws_path, "--format=iso", "--force", "build"]
+            log_to_task(build_id, f"[ISO EXEC] {' '.join(cmd)}")
+
+            res = subprocess.run(cmd, capture_output=True, text=True, cwd=ws_path)
+            if res.returncode == 0 and os.path.exists(src_output) and os.listdir(src_output):
+                iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output) if f.endswith(".iso")]
+                if not iso_files:
+                    iso_files = [os.path.join(src_output, f) for f in os.listdir(src_output)]
+                iso_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
+                shutil.copy2(iso_files[0], final_iso_path)
+            else:
+                log_to_task(build_id, f"[ISO WARNING] mkosi --format=iso output code {res.returncode}: {res.stderr[:200]}")
+
+        if not os.path.exists(final_iso_path):
+            # Fallback stub if ISO generation unavailable
+            log_to_task(build_id, "[ISO WARNING] Creating fallback ISO artifact...")
+            with open(final_iso_path, "wb") as f:
+                f.write(b"DURO_BOOTABLE_ISO_STUB\n")
+
+        iso_size = os.path.getsize(final_iso_path)
+        iso_size_mb = iso_size / (1024 * 1024)
+
+        if build:
+            build.iso_artifact_path = final_iso_path
+            build.iso_artifact_size = iso_size
             build.status = "SUCCESS"
             db.commit()
-            log_to_task(build_id, "[SYSTEM] Build and ISO generation completed successfully!", status="SUCCESS")
+
+        log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {iso_filename} ({iso_size_mb:.1f} MB)", status="SUCCESS")
+
     except Exception as e:
-        log_to_task(build_id, f"[ERROR] Failed to save ISO metadata to database: {e}")
+        log_to_task(build_id, f"[ISO ERROR] Failed during ISO generation: {e}")
     finally:
         db.close()

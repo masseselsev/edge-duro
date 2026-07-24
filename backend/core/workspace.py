@@ -113,6 +113,23 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     postinst_commands = [
         "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
     ]
+
+    # Install Edge & Custom repository packages during postinst phase after custom.list overlay is applied
+    custom_edge_pkgs = [p for p in (recipe.packages or []) if p.lower().startswith("edge-")]
+    if "edge-base" not in custom_edge_pkgs:
+        custom_edge_pkgs.insert(0, "edge-base")
+
+    if custom_edge_pkgs:
+        edge_pkgs_str = " ".join(custom_edge_pkgs)
+        postinst_commands.append(f"""
+# Install Edge & custom repository packages inside chroot
+if command -v apt-get >/dev/null 2>&1; then
+  echo "[POSTINST] Installing Edge platform packages: {edge_pkgs_str}..."
+  apt-get update --allow-insecure-repositories --allow-unauthenticated || true
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated {edge_pkgs_str}
+fi
+""")
+
     if recipe.timezone and recipe.timezone.strip():
         tz = recipe.timezone.strip()
         postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime 2>/dev/null && echo \"{tz}\" > /etc/timezone 2>/dev/null || true")

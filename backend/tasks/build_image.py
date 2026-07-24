@@ -39,12 +39,15 @@ def build_image_task(self, build_id: str, recipe_id: int):
         # 3. Execute mkosi build process
         log_to_task(build_id, "[STEP 3/4] Invoking mkosi systemd-nspawn build engine...")
 
+        # Clean existing output directory if present
+        shutil.rmtree(os.path.join(ws_path, "output"), ignore_errors=True)
+
         mkosi_bin = shutil.which("mkosi")
         if not mkosi_bin:
             log_to_task(build_id, "[WARNING] 'mkosi' binary not found in worker container PATH. Running in simulated build mode...")
             cmd = ["echo", "[SIMULATION] Built OS image successfully."]
         else:
-            cmd = ["mkosi", "--directory", ws_path, "build"]
+            cmd = ["mkosi", "--directory", ws_path, "--force", "build"]
 
         log_to_task(build_id, f"[EXEC] {' '.join(cmd)}")
 
@@ -91,19 +94,27 @@ def build_image_task(self, build_id: str, recipe_id: int):
         uncompressed_raw_path = None
 
         if os.path.exists(src_output) and os.listdir(src_output):
-            first_file = os.path.join(src_output, os.listdir(src_output)[0])
+            all_files = [os.path.join(src_output, f) for f in os.listdir(src_output)]
+            disk_files = [f for f in all_files if f.endswith(".raw") or f.endswith(".img") or f.endswith(".raw.xz")]
+            if not disk_files:
+                disk_files = [f for f in all_files if not f.endswith(".efi") and not f.endswith(".vmlinuz") and not f.endswith(".initrd")]
+            if not disk_files:
+                disk_files = all_files
+
+            disk_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
+            target_raw_file = disk_files[0]
             
-            if not first_file.endswith(".xz"):
-                uncompressed_raw_path = first_file
-                log_to_task(build_id, f"Compressing raw disk image ({os.path.getsize(first_file)} bytes) into {raw_xz_filename}...")
+            if not target_raw_file.endswith(".xz"):
+                uncompressed_raw_path = target_raw_file
+                log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({os.path.getsize(target_raw_file)} bytes) into {raw_xz_filename}...")
                 try:
                     with open(final_raw_xz_path, "wb") as out_f:
-                        subprocess.run(["xz", "-c", "-3", first_file], stdout=out_f, check=True)
+                        subprocess.run(["xz", "-c", "-3", target_raw_file], stdout=out_f, check=True)
                 except Exception as e:
                     log_to_task(build_id, f"[WARNING] XZ compression failed ({e}), copying raw file...")
-                    shutil.copy2(first_file, final_raw_xz_path)
+                    shutil.copy2(target_raw_file, final_raw_xz_path)
             else:
-                shutil.copy2(first_file, final_raw_xz_path)
+                shutil.copy2(target_raw_file, final_raw_xz_path)
         else:
             with open(final_raw_xz_path, "wb") as f:
                 f.write(b"DURO_RAW_IMAGE_STUB_DATA\n")

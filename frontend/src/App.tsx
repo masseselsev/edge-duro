@@ -193,7 +193,7 @@ function AppContent() {
   return (
     <div className="min-h-full flex flex-col font-sans pb-16">
       {/* Global Header matching Edge-B.R.O. exact compact scale */}
-      <header className="bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 z-40">
+      <header className="bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-2.5 space-y-2.5">
           {/* Row 1: Logo/Title | Server Metrics | Actions */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">

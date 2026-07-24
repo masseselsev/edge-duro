@@ -8,11 +8,20 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     """
     packages_str = " ".join(recipe.packages) if recipe.packages else "systemd systemd-sysv dbus iproute2"
 
+    arch_map = {
+        "amd64": "x86-64",
+        "x86_64": "x86-64",
+        "x86-64": "x86-64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    }
+    mkosi_arch = arch_map.get((recipe.architecture or "amd64").lower(), "x86-64")
+
     config_lines = [
         "[Distribution]",
         f"Distribution={recipe.distribution}",
         f"Release={recipe.release}",
-        f"Architecture={recipe.architecture}",
+        f"Architecture={mkosi_arch}",
         "",
         "[Output]",
         f"ImageId={recipe.name.lower().replace(' ', '_')}",

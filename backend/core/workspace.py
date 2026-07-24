@@ -110,35 +110,11 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     os.chmod(prepare_path, 0o755)
 
     # 4. Post-install script hook & timezone setup
-    postinst_commands = [
-        "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-    ]
-
-    # Install Edge & Custom repository packages during postinst phase after custom.list overlay is applied
-    custom_edge_pkgs = [p for p in (recipe.packages or []) if p.lower().startswith("edge-")]
-    if "edge-base" not in custom_edge_pkgs:
-        custom_edge_pkgs.insert(0, "edge-base")
-
-    if custom_edge_pkgs:
-        edge_pkgs_str = " ".join(custom_edge_pkgs)
-        postinst_commands.append(f"""
-# Configure DNS resolution inside postinst chroot container if writable
-if [ -w /etc/resolv.conf ] || [ ! -f /etc/resolv.conf ]; then
-  echo "nameserver 1.1.1.1" > /etc/resolv.conf 2>/dev/null || true
-  echo "nameserver 8.8.8.8" >> /etc/resolv.conf 2>/dev/null || true
-fi
-
-# Ensure dpkg directory structure exists and disable lock checks
-mkdir -p /var/lib/dpkg/updates /var/lib/apt/lists /var/cache/apt/archives
-touch /var/lib/dpkg/status /var/lib/dpkg/available
-
-# Install Edge & custom repository packages inside chroot
-if command -v apt-get >/dev/null 2>&1; then
-  echo "[POSTINST] Installing Edge platform packages: {edge_pkgs_str}..."
-  apt-get -o Debug::NoLocking=true update --allow-insecure-repositories --allow-unauthenticated || true
-  DEBIAN_FRONTEND=noninteractive apt-get -o Debug::NoLocking=true install -y --allow-unauthenticated {edge_pkgs_str}
-fi
-""")
+    # NOTE: In mkosi v14 (Debian package), mkosi.postinst runs on the HOST with $BUILDROOT
+    # pointing to the rootfs. We must chroot into $BUILDROOT to modify the target image.
+    # Edge packages are installed by mkosi itself via [Content] Packages= after
+    # mkosi.prepare.chroot adds custom APT repos.
+    postinst_commands = []
 
     if recipe.timezone and recipe.timezone.strip():
         tz = recipe.timezone.strip()
@@ -168,13 +144,23 @@ fi
     if recipe.raw_postinst and recipe.raw_postinst.strip():
         postinst_commands.append(recipe.raw_postinst.strip())
 
-    if len(postinst_commands) > 1:
-        postinst_content = "#!/bin/bash\nset -e\n" + "\n".join(postinst_commands) + "\n"
-        for hook_name in ["mkosi.postinst", "mkosi.postinst.chroot", "mkosi.finalize", "mkosi.finalize.chroot"]:
-            h_path = os.path.join(workspace_path, hook_name)
-            with open(h_path, "w") as f:
-                f.write(postinst_content)
-            os.chmod(h_path, 0o755)
+    if postinst_commands:
+        # mkosi v14: mkosi.postinst receives $1="final" and $BUILDROOT points to rootfs
+        chroot_body = "\n".join(postinst_commands)
+        postinst_script = f"""#!/bin/bash
+set -e
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+
+if [ -n "$BUILDROOT" ] && [ -d "$BUILDROOT" ]; then
+  chroot "$BUILDROOT" /bin/bash -c '{chroot_body}'
+else
+  {chroot_body}
+fi
+"""
+        postinst_path = os.path.join(workspace_path, "mkosi.postinst")
+        with open(postinst_path, "w") as f:
+            f.write(postinst_script)
+        os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service
     firstboot_lines = ["#!/bin/bash", "set -e"]

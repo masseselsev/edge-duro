@@ -35,6 +35,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         f"ImageId={recipe.name.lower().replace(' ', '_')}",
         "Format=disk",
         "OutputDirectory=output",
+        "CacheDirectory=/opt/data/duro_workspace/cache",
         "",
         "[Content]",
         f"Packages={packages_str}",

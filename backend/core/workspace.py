@@ -87,26 +87,36 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
             f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
 
-    # 3.5. Prepare script (runs inside buildroot before package installation)
-    prepare_sources = [
+    # 3.5. Prepare script — runs on HOST before package installation (mkosi v14)
+    # Uses $BUILDROOT to access the rootfs. Writes custom repos and runs apt-get update
+    # so that edge packages are resolvable when mkosi runs apt-get install.
+    prepare_script_lines = [
         "#!/bin/bash",
-        "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
-        'CACHE_DIR="/opt/data/duro_workspace/cache/apt"',
-        'mkdir -p "$CACHE_DIR"',
-        "mkdir -p /etc/apt/sources.list.d",
-        "cat << 'EOF' > /etc/apt/sources.list.d/custom.list"
+        "set -e",
+        'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH',
+        '',
+        '# Determine rootfs path — mkosi v14 passes $BUILDROOT',
+        'ROOT="${BUILDROOT:-/}"',
+        '',
+        '# Write custom APT repos into the rootfs',
+        'mkdir -p "$ROOT/etc/apt/sources.list.d"',
+        "cat << 'REPOEOF' > \"$ROOT/etc/apt/sources.list.d/custom.list\"",
     ]
-    prepare_sources.extend(repo_lines)
-    prepare_sources.extend([
-        "EOF",
-        "if command -v apt-get >/dev/null 2>&1; then",
-        '  apt-get -o Dir::Cache::Archives="$CACHE_DIR" update --allow-insecure-repositories --allow-unauthenticated || true',
-        "fi"
+    prepare_script_lines.extend(repo_lines)
+    prepare_script_lines.extend([
+        "REPOEOF",
+        '',
+        '# Run apt-get update inside the rootfs chroot',
+        'if [ "$ROOT" != "/" ] && [ -d "$ROOT/usr" ]; then',
+        '  chroot "$ROOT" apt-get update --allow-insecure-repositories --allow-unauthenticated || true',
+        'elif command -v apt-get >/dev/null 2>&1; then',
+        '  apt-get update --allow-insecure-repositories --allow-unauthenticated || true',
+        'fi',
     ])
 
-    prepare_path = os.path.join(workspace_path, "mkosi.prepare.chroot")
+    prepare_path = os.path.join(workspace_path, "mkosi.prepare")
     with open(prepare_path, "w") as f:
-        f.write("\n".join(prepare_sources) + "\n")
+        f.write("\n".join(prepare_script_lines) + "\n")
     os.chmod(prepare_path, 0o755)
 
     # 4. Post-install script hook & timezone setup

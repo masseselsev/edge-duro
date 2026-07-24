@@ -96,7 +96,7 @@ def get_build(build_id: str, db: Session = Depends(get_db)):
 async def stream_build_logs(build_id: str, request: Request):
     """
     SSE Endpoint streaming live build logs from Redis PubSub channel.
-    Drains all pending Redis PubSub messages instantly with zero per-message sleep.
+    Uses native redis-asyncio pubsub.listen() for zero-latency, rock-solid real-time streaming.
     """
     async def event_generator():
         r = aioredis.from_url(REDIS_URL)
@@ -104,29 +104,25 @@ async def stream_build_logs(build_id: str, request: Request):
         channel_name = f"build:{build_id}"
         await pubsub.subscribe(channel_name)
 
-        last_ping = time.time()
         try:
-            while True:
+            async for message in pubsub.listen():
                 if await request.is_disconnected():
                     break
-                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.02)
                 if message and message.get("type") == "message":
                     data = message.get("data")
                     if isinstance(data, bytes):
                         data = data.decode("utf-8")
                     yield {"event": "log", "data": str(data)}
-                    last_ping = time.time()
-                else:
-                    now = time.time()
-                    if now - last_ping >= 5.0:
-                        last_ping = now
-                        yield {"event": "ping", "data": "keepalive"}
-                    await asyncio.sleep(0.01)
+        except asyncio.CancelledError:
+            pass
         finally:
-            await pubsub.unsubscribe(channel_name)
-            await r.close()
+            try:
+                await pubsub.unsubscribe(channel_name)
+                await r.close()
+            except Exception:
+                pass
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(event_generator(), ping=5)
 
 
 @router.post("/builds/{build_id}/cancel")

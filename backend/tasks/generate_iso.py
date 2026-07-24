@@ -8,6 +8,26 @@ from models import Build, Recipe
 from celery_app import celery_app
 
 
+def extract_edge_base_version(ws_path: str) -> str:
+    """Extract Version of mandatory 'edge-base' Debian package from rootfs dpkg status database."""
+    possible_status_paths = [
+        os.path.join(ws_path, "root", "var", "lib", "dpkg", "status"),
+        os.path.join(ws_path, "buildroot", "var", "lib", "dpkg", "status"),
+        os.path.join(ws_path, "image", "var", "lib", "dpkg", "status"),
+    ]
+    for status_file in possible_status_paths:
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                match = re.search(r'Package:\s*edge-base\n(?:[^\n]+\n)*?Version:\s*([^\n]+)', content)
+                if match:
+                    return match.group(1).strip()
+            except Exception:
+                pass
+    return ""
+
+
 @celery_app.task(name="tasks.generate_iso.generate_iso_task")
 def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
     from tasks import log_to_task
@@ -22,10 +42,22 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         outputs_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "outputs")
         os.makedirs(outputs_dir, exist_ok=True)
 
-        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        base_name = recipe.name.lower().replace(' ', '_') if recipe else "edge_os"
-        iso_filename = f"{base_name}_{timestamp_str}.iso"
+        # 1. Enforce mandatory edge-base package presence
+        edge_base_ver = extract_edge_base_version(ws_path)
+        if not edge_base_ver:
+            error_msg = "[ISO ERROR] Mandatory package 'edge-base' is missing from rootfs dpkg database! Aborting ISO generation."
+            log_to_task(build_id, error_msg, status="FAILED")
+            return
+
+        # 2. Strict Naming Rule: edge_{EDGE_BASE_VERSION}_{RECIPE_SLUG}.iso
+        recipe_name_raw = recipe.name.lower() if recipe else "generic"
+        recipe_slug = recipe_name_raw.replace(' ', '_').replace('-', '_')
+        recipe_slug = re.sub(r'[^a-z0-9_]', '', recipe_slug)
+
+        iso_filename = f"edge_{edge_base_ver}_{recipe_slug}.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
+
+        log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")
 
         src_output = os.path.join(ws_path, "output")
         raw_candidates = []

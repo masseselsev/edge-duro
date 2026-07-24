@@ -85,6 +85,8 @@ class Build(Base):
     log_output = Column(Text, default='', nullable=False)
     artifact_path = Column(String, nullable=True)
     artifact_size = Column(BigInteger, nullable=True)
+    iso_artifact_path = Column(String, nullable=True)
+    iso_artifact_size = Column(BigInteger, nullable=True)
     output_format = Column(String, nullable=True) # raw_xz, iso
     duration_seconds = Column(Integer, nullable=True)
 

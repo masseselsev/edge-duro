@@ -70,6 +70,8 @@ def run_migrations_safety(db: Session):
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS raw_firstboot TEXT;"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS timezone VARCHAR DEFAULT 'UTC';"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS hostname_from_netif BOOLEAN DEFAULT FALSE;"))
+        db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS iso_artifact_path VARCHAR;"))
+        db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS iso_artifact_size BIGINT;"))
         db.commit()
     except Exception as e:
         print(f"Safety migration warning: {e}")

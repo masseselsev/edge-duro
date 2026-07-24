@@ -144,17 +144,31 @@ def cancel_build(
 
 
 @router.get("/builds/{build_id}/download")
-def download_build_artifact(build_id: str, db: Session = Depends(get_db)):
+def download_build_artifact(
+    build_id: str,
+    format: Optional[str] = Query("raw_xz"),
+    db: Session = Depends(get_db)
+):
     build = db.query(models.Build).filter(models.Build.id == build_id).first()
-    if not build or not build.artifact_path:
-        raise HTTPException(status_code=404, detail="Build artifact not available.")
+    if not build:
+        raise HTTPException(status_code=404, detail="Build record not found.")
 
-    if not os.path.exists(build.artifact_path):
-        raise HTTPException(status_code=404, detail="Artifact file does not exist on server storage.")
+    target_path = None
+    if format == "iso":
+        target_path = build.iso_artifact_path
+        if not target_path and build.artifact_path:
+            possible_iso = build.artifact_path.replace(".raw.xz", ".iso").replace(".raw", ".iso")
+            if os.path.exists(possible_iso):
+                target_path = possible_iso
+    else:
+        target_path = build.artifact_path
 
-    filename = os.path.basename(build.artifact_path)
+    if not target_path or not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail=f"Artifact format '{format}' file does not exist on server storage.")
+
+    filename = os.path.basename(target_path)
     return FileResponse(
-        path=build.artifact_path,
+        path=target_path,
         filename=filename,
         media_type="application/octet-stream"
     )

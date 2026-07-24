@@ -146,6 +146,8 @@ class BuildResponse(UTCModel):
     log_output: str
     artifact_path: Optional[str] = None
     artifact_size: Optional[int] = None
+    iso_artifact_path: Optional[str] = None
+    iso_artifact_size: Optional[int] = None
     output_format: Optional[str] = None
     duration_seconds: Optional[int] = None
 

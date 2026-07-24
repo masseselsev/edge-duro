@@ -1,6 +1,8 @@
 import os
 import shutil
 import subprocess
+from database import SessionLocal
+from models import Build
 from celery_app import celery_app
 
 
@@ -33,3 +35,18 @@ def generate_iso_task(build_id: str, raw_image_path: str, recipe_id: int):
                 log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {os.path.basename(iso_path)}")
         except Exception as e:
             log_to_task(build_id, f"[ISO ERROR] Failed executing xorriso: {e}")
+
+    # Record ISO artifact & final build status in DB
+    db = SessionLocal()
+    try:
+        build = db.query(Build).filter(Build.id == build_id).first()
+        if build and os.path.exists(iso_path):
+            build.iso_artifact_path = iso_path
+            build.iso_artifact_size = os.path.getsize(iso_path)
+            build.status = "SUCCESS"
+            db.commit()
+            log_to_task(build_id, "[SYSTEM] Build and ISO generation completed successfully!", status="SUCCESS")
+    except Exception as e:
+        log_to_task(build_id, f"[ERROR] Failed to save ISO metadata to database: {e}")
+    finally:
+        db.close()

@@ -42,14 +42,21 @@ def build_image_task(self, build_id: str, recipe_id: int):
         # Clean existing output directory if present
         shutil.rmtree(os.path.join(ws_path, "output"), ignore_errors=True)
 
+        stdbuf_bin = shutil.which("stdbuf")
         mkosi_bin = shutil.which("mkosi")
         if not mkosi_bin:
             log_to_task(build_id, "[WARNING] 'mkosi' binary not found in worker container PATH. Running in simulated build mode...")
             cmd = ["echo", "[SIMULATION] Built OS image successfully."]
         else:
             cmd = ["mkosi", "--directory", ws_path, "--force", "build"]
+            if stdbuf_bin:
+                cmd = ["stdbuf", "-oL", "-eL"] + cmd
 
         log_to_task(build_id, f"[EXEC] {' '.join(cmd)}")
+
+        proc_env = os.environ.copy()
+        proc_env["PYTHONUNBUFFERED"] = "1"
+        proc_env["PYTHONIOENCODING"] = "utf-8"
 
         process = subprocess.Popen(
             cmd,
@@ -57,7 +64,8 @@ def build_image_task(self, build_id: str, recipe_id: int):
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=ws_path
+            cwd=ws_path,
+            env=proc_env
         )
 
         last_progress_pct = -1

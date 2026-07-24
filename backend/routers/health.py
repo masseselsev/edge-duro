@@ -29,9 +29,10 @@ BANDWIDTH_MIN_INTERVAL = 0.5
 
 
 def get_network_bytes() -> tuple[float, int, int]:
-    """Read cumulative Rx/Tx bytes from /proc/net/dev for physical and host interfaces."""
+    """Read cumulative Rx/Tx bytes from /proc/net/dev for physical interfaces."""
     rx_total = 0
     tx_total = 0
+
     base_dir = "/proc"
     for p in ["/host/proc/1", "/host/proc", "/proc"]:
         if os.path.exists(f"{p}/net/dev"):
@@ -39,9 +40,7 @@ def get_network_bytes() -> tuple[float, int, int]:
             break
 
     dev_path = f"{base_dir}/net/dev"
-    # Physical NIC prefixes (eth*, en*, wl*, ib*, ppp*, wlan*)
-    # Exclude virtual/container interfaces (veth*, docker*, br-*, lo*, tun*, tap*, vnet*)
-    physical_prefixes = ("eth", "en", "wl", "ib", "ppp", "wlan")
+    physical_prefixes = ("eth", "en", "wl", "ib", "ppp")
 
     try:
         with open(dev_path, "r") as f:
@@ -51,13 +50,12 @@ def get_network_bytes() -> tuple[float, int, int]:
             if len(parts) < 2:
                 continue
             iface = parts[0].strip()
-            if any(iface.startswith(v) for v in ("veth", "docker", "br-", "lo", "dummy", "tun", "tap", "vnet")):
+            if not iface.startswith(physical_prefixes):
                 continue
-            if iface.startswith(physical_prefixes):
-                stats = parts[1].split()
-                if len(stats) >= 9:
-                    rx_total += int(stats[0])
-                    tx_total += int(stats[8])
+            stats = parts[1].split()
+            if len(stats) >= 9:
+                rx_total += int(stats[0])
+                tx_total += int(stats[8])
     except Exception:
         pass
 

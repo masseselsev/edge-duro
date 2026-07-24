@@ -50,20 +50,23 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         with open(os.path.join(etc_dir, "hostname"), "w") as f:
             f.write(recipe.hostname.strip().lower() + "\n")
 
-    # 2. Custom APT Repositories
-    if recipe.repositories:
-        sources_dir = os.path.join(extra_dir, "etc", "apt", "sources.list.d")
-        os.makedirs(sources_dir, exist_ok=True)
+    # 2. Custom APT Repositories (Populated into both mkosi.skeleton and mkosi.extra)
+    rel = recipe.release or "bookworm"
+    repo_lines = []
+    if recipe.repositories and isinstance(recipe.repositories, list):
         for repo in recipe.repositories:
-            if isinstance(repo, dict):
-                r_name = repo.get("name", "custom")
-                r_url = repo.get("url", "")
-                r_suite = repo.get("suite", "")
-                r_comp = repo.get("components", "main")
-                if r_url and r_suite:
-                    list_file = os.path.join(sources_dir, f"{r_name}.list")
-                    with open(list_file, "w") as f:
-                        f.write(f"deb {r_url} {r_suite} {r_comp}\n")
+            if isinstance(repo, dict) and repo.get("url"):
+                url = repo.get("url")
+                suite = repo.get("suite") or rel
+                comp = repo.get("components") or "main"
+                repo_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
+
+    if repo_lines:
+        for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
+            sources_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "sources.list.d")
+            os.makedirs(sources_dir, exist_ok=True)
+            with open(os.path.join(sources_dir, "custom.list"), "w") as f:
+                f.write("\n".join(repo_lines) + "\n")
 
     # 3. Assets overlay
     for asset in assets:
@@ -78,13 +81,13 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             shutil.copy2(asset.file_path, dest_file)
 
     # 3.4. Persistent APT Package Cache configuration
-    apt_conf_dir = os.path.join(extra_dir, "etc", "apt", "apt.conf.d")
-    os.makedirs(apt_conf_dir, exist_ok=True)
-    with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
-        f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
+    for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
+        apt_conf_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "apt.conf.d")
+        os.makedirs(apt_conf_dir, exist_ok=True)
+        with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
+            f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
 
     # 3.5. Prepare script (runs inside buildroot before package installation)
-    rel = recipe.release or "bookworm"
     prepare_sources = [
         "#!/bin/bash",
         "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH",
@@ -93,15 +96,7 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         "mkdir -p /etc/apt/sources.list.d",
         "cat << 'EOF' > /etc/apt/sources.list.d/custom.list"
     ]
-
-    if recipe.repositories and isinstance(recipe.repositories, list):
-        for repo in recipe.repositories:
-            if isinstance(repo, dict) and repo.get("url"):
-                url = repo.get("url")
-                suite = repo.get("suite") or rel
-                comp = repo.get("components") or "main"
-                prepare_sources.append(f"deb [trusted=yes] {url} {suite} {comp}")
-
+    prepare_sources.extend(repo_lines)
     prepare_sources.extend([
         "EOF",
         "if command -v apt-get >/dev/null 2>&1; then",

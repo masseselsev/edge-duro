@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime
@@ -11,7 +12,7 @@ from celery_app import celery_app
 def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
     from tasks import log_to_task
 
-    log_to_task(build_id, "[ISO] Starting bootable ISO image packaging via xorriso...")
+    log_to_task(build_id, "[ISO] Starting UEFI El Torito bootable ISO image generation...")
 
     db = SessionLocal()
     try:
@@ -26,7 +27,6 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         iso_filename = f"{base_name}_{timestamp_str}.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
-        # Search for uncompressed .raw / .img file in workspace or outputs
         src_output = os.path.join(ws_path, "output")
         raw_candidates = []
         if os.path.exists(src_output):
@@ -38,23 +38,65 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
 
         if raw_candidates:
             target_raw = raw_candidates[0]
-            log_to_task(build_id, f"[ISO EXEC] Packaging raw disk image '{os.path.basename(target_raw)}' ({os.path.getsize(target_raw)} bytes) into ISO via xorriso...")
+            log_to_task(build_id, f"[ISO EXEC] Processing raw image '{os.path.basename(target_raw)}' ({os.path.getsize(target_raw)} bytes) into UEFI El Torito ISO...")
+
+            iso_staging = os.path.join(ws_path, "iso_staging")
+            shutil.rmtree(iso_staging, ignore_errors=True)
+            os.makedirs(iso_staging, exist_ok=True)
+
+            efi_img_path = os.path.join(iso_staging, "efi.img")
+            esp_extracted = False
+
+            # Extract EFI System Partition (ESP) using sfdisk and dd
+            try:
+                sf_res = subprocess.run(["sfdisk", "-d", target_raw], capture_output=True, text=True)
+                if sf_res.returncode == 0:
+                    for line in sf_res.stdout.splitlines():
+                        if "start=" in line and ("size=" in line or "type=" in line):
+                            start_match = re.search(r'start=\s*(\d+)', line)
+                            size_match = re.search(r'size=\s*(\d+)', line)
+                            if start_match and size_match:
+                                start_sector = int(start_match.group(1))
+                                sector_count = int(size_match.group(1))
+                                dd_cmd = [
+                                    "dd", f"if={target_raw}", f"of={efi_img_path}",
+                                    "bs=512", f"skip={start_sector}", f"count={sector_count}",
+                                    "status=none"
+                                ]
+                                subprocess.run(dd_cmd, check=True)
+                                esp_extracted = os.path.exists(efi_img_path) and os.path.getsize(efi_img_path) > 0
+                                if esp_extracted:
+                                    log_to_task(build_id, f"[ISO] Extracted EFI System Partition image ({os.path.getsize(efi_img_path)} bytes)")
+                                    break
+            except Exception as e:
+                log_to_task(build_id, f"[ISO WARNING] ESP partition extraction failed: {e}")
+
+            # Copy raw disk image into ISO staging directory
+            shutil.copy2(target_raw, os.path.join(iso_staging, os.path.basename(target_raw)))
 
             xorriso_bin = shutil.which("xorriso")
-            if xorriso_bin:
+            if xorriso_bin and esp_extracted:
                 cmd = [
                     "xorriso", "-as", "mkisofs",
                     "-r", "-J",
                     "-V", "DURO_BOOT",
+                    "-eltorito-alt-boot",
+                    "-e", "efi.img",
+                    "-no-emul-boot",
+                    "-isohybrid-gpt-basdat",
                     "-o", final_iso_path,
-                    target_raw
+                    iso_staging
                 ]
+                log_to_task(build_id, f"[ISO EXEC] {' '.join(cmd)}")
                 res = subprocess.run(cmd, capture_output=True, text=True)
                 if res.returncode != 0:
-                    log_to_task(build_id, f"[ISO WARNING] xorriso returned code {res.returncode}: {res.stderr[:200]}, copying raw disk file...")
+                    log_to_task(build_id, f"[ISO WARNING] xorriso UEFI build failed: {res.stderr[:200]}, falling back to raw copy...")
                     shutil.copy2(target_raw, final_iso_path)
             else:
+                log_to_task(build_id, "[ISO WARNING] xorriso or ESP image unavailable, copying raw image directly...")
                 shutil.copy2(target_raw, final_iso_path)
+
+            shutil.rmtree(iso_staging, ignore_errors=True)
         else:
             log_to_task(build_id, "[ISO WARNING] No raw disk image found to package. Creating fallback ISO...")
             with open(final_iso_path, "wb") as f:
@@ -69,7 +111,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             build.status = "SUCCESS"
             db.commit()
 
-        log_to_task(build_id, f"[ISO SUCCESS] Created bootable ISO: {iso_filename} ({iso_size_mb:.1f} MB)", status="SUCCESS")
+        log_to_task(build_id, f"[ISO SUCCESS] Created bootable UEFI ISO: {iso_filename} ({iso_size_mb:.1f} MB)", status="SUCCESS")
 
     except Exception as e:
         log_to_task(build_id, f"[ISO ERROR] Failed during ISO generation: {e}")

@@ -55,8 +55,14 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     fetch(`/api/builds/${buildId}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.log_output && updateLogs) {
-          setLogs(data.log_output.split('\n'));
+        if (data.log_output) {
+          const freshLogs = data.log_output.split('\n').filter((l: string) => l.length > 0);
+          setLogs((prev) => {
+            if (updateLogs || freshLogs.length > prev.length) {
+              return freshLogs;
+            }
+            return prev;
+          });
         }
         if (data.status) {
           setStatus(data.status);
@@ -75,10 +81,10 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     // Initial fetch including full logs
     fetchBuildStatus(true);
 
-    // Polling build status only (without resetting logs array)
+    // Polling build status & syncing logs if server has newer lines
     const pollInterval = setInterval(() => {
       fetchBuildStatus(false);
-    }, 2000);
+    }, 3000);
 
     // Connect SSE stream for realtime line appends
     const eventSource = new EventSource(`/api/builds/${buildId}/stream`);
@@ -94,7 +100,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     });
 
     eventSource.onerror = (err) => {
-      eventSource.close();
+      console.warn("SSE connection error; native EventSource will attempt auto-reconnect.");
     };
 
     return () => {

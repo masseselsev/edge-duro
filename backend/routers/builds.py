@@ -96,6 +96,7 @@ def get_build(build_id: str, db: Session = Depends(get_db)):
 async def stream_build_logs(build_id: str, request: Request):
     """
     SSE Endpoint streaming live build logs from Redis PubSub channel.
+    Includes 5-second keepalive pings to keep TCP stream active across proxies.
     """
     async def event_generator():
         r = aioredis.from_url(REDIS_URL)
@@ -103,16 +104,23 @@ async def stream_build_logs(build_id: str, request: Request):
         channel_name = f"build:{build_id}"
         await pubsub.subscribe(channel_name)
 
+        idle_ticks = 0
         try:
             while True:
                 if await request.is_disconnected():
                     break
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message and message.get("type") == "message":
+                    idle_ticks = 0
                     data = message.get("data")
                     if isinstance(data, bytes):
                         data = data.decode("utf-8")
                     yield {"event": "log", "data": str(data)}
+                else:
+                    idle_ticks += 1
+                    if idle_ticks >= 5:
+                        idle_ticks = 0
+                        yield {"event": "ping", "data": "keepalive"}
                 await asyncio.sleep(0.1)
         finally:
             await pubsub.unsubscribe(channel_name)

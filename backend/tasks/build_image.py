@@ -62,8 +62,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
+            bufsize=0,
             cwd=ws_path,
             env=proc_env
         )
@@ -71,8 +70,14 @@ def build_image_task(self, build_id: str, recipe_id: int):
         last_progress_pct = -1
         last_cancel_check = 0.0
         if process.stdout:
-            for line in iter(process.stdout.readline, ""):
-                clean_line = line.rstrip("\r\n").strip()
+            while True:
+                line_bytes = process.stdout.readline()
+                if not line_bytes:
+                    break
+                try:
+                    clean_line = line_bytes.decode('utf-8', errors='replace').rstrip("\r\n").strip()
+                except Exception:
+                    continue
                 if not clean_line:
                     continue
 

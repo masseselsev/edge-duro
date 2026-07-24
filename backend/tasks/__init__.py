@@ -19,10 +19,9 @@ celery_app.conf.timezone = 'UTC'
 
 
 def log_to_task(task_id: str, message: str, status: str = None) -> None:
-    """
-    Appends a log line to the specified Build record in the database
-    and publishes to Redis PubSub for real-time SSE streaming.
-    """
+    if not message or not message.strip():
+        return
+
     from database import SessionLocal
     from models import Build
     from datetime import datetime

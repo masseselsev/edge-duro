@@ -62,7 +62,9 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         if process.stdout:
             for line in iter(process.stdout.readline, ""):
-                clean_line = line.rstrip("\r\n")
+                clean_line = line.rstrip("\r\n").strip()
+                if not clean_line:
+                    continue
                 log_to_task(build_id, clean_line)
 
                 # Check if build was cancelled via API

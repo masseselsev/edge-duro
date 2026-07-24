@@ -214,13 +214,18 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           ) : (
             (() => {
               const isProgressLine = (str: string): boolean => {
-                return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(str) ||
-                       /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(str);
+                const clean = str.replace(/^\[.*?\]\s*/, '').trim();
+                if (!clean) return false;
+                return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(clean) ||
+                       /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(clean);
               };
 
               const displayLogs: string[] = [];
               for (const line of logs) {
-                if (!line || !line.trim()) continue;
+                if (!line) continue;
+                const bodyOnly = line.replace(/^\[.*?\]\s*/, '').trim();
+                if (!bodyOnly) continue; // Skip blank timestamp lines
+
                 if (displayLogs.length > 0 && isProgressLine(line) && isProgressLine(displayLogs[displayLogs.length - 1])) {
                   displayLogs[displayLogs.length - 1] = line;
                 } else {

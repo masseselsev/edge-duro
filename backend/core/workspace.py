@@ -157,20 +157,31 @@ fi
     if postinst_commands:
         # mkosi v14: mkosi.postinst receives $1="final" and $BUILDROOT points to rootfs
         chroot_body = "\n".join(postinst_commands)
-        postinst_script = f"""#!/bin/bash
+    # Add pre-downloaded deb package installation hook
+    postinst_script = f"""#!/bin/bash
 set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 
-if [ -n "$BUILDROOT" ] && [ -d "$BUILDROOT" ]; then
-  chroot "$BUILDROOT" /bin/bash -c '{chroot_body}'
+ROOT="${{BUILDROOT:-/}}"
+
+# 1. Install pre-downloaded Edge platform .deb packages inside chroot
+if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
+  echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
+  chroot "$ROOT" /bin/bash -c "dpkg -i --force-depends /opt/edge_packages/*.deb || apt-get install -f -y --allow-unauthenticated || true"
+  rm -rf "$ROOT/opt/edge_packages"
+fi
+
+# 2. Run recipe post-install hooks (timezone, hostname MAC, custom scripts)
+if [ "$ROOT" != "/" ] && [ -d "$ROOT/usr" ]; then
+  chroot "$ROOT" /bin/bash -c '{"\n".join(postinst_commands)}'
 else
-  {chroot_body}
+  {"\n".join(postinst_commands)}
 fi
 """
-        postinst_path = os.path.join(workspace_path, "mkosi.postinst")
-        with open(postinst_path, "w") as f:
-            f.write(postinst_script)
-        os.chmod(postinst_path, 0o755)
+    postinst_path = os.path.join(workspace_path, "mkosi.postinst")
+    with open(postinst_path, "w") as f:
+        f.write(postinst_script)
+    os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service
     firstboot_lines = ["#!/bin/bash", "set -e"]

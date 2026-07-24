@@ -10,9 +10,9 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
     if "systemd-boot" not in pkgs:
         pkgs.append("systemd-boot")
-    if "edge-base" not in pkgs:
-        pkgs.append("edge-base")
-    packages_formatted = "\n    ".join(pkgs)
+    # Standard distribution packages only for mkosi base build (Edge packages are pre-downloaded and installed via dpkg)
+    std_pkgs = [p for p in pkgs if not p.lower().startswith("edge-")]
+    packages_formatted = "\n    ".join(std_pkgs)
 
     arch_map = {
         "amd64": "x86-64",

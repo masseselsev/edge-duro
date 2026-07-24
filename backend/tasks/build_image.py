@@ -32,6 +32,14 @@ def build_image_task(self, build_id: str, recipe_id: int):
         ws_path = prepare_workspace(recipe.id)
         populate_extra_tree(recipe, assets, ws_path)
 
+        # Pre-download all Edge platform packages into mkosi.extra/opt/edge_packages/
+        try:
+            from core.repo_downloader import download_edge_packages
+            dl_files = download_edge_packages(recipe, ws_path)
+            log_to_task(build_id, f"[REPO DOWNLOADER] Pre-downloaded {len(dl_files)} Edge platform .deb packages directly.")
+        except Exception as e:
+            log_to_task(build_id, f"[REPO DOWNLOADER WARNING] Failed to pre-download Edge packages: {e}")
+
         # 2. Generate mkosi.conf
         log_to_task(build_id, "[STEP 2/4] Generating mkosi.conf recipe configuration...")
         generate_mkosi_conf(recipe, ws_path)

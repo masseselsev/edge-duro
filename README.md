@@ -14,6 +14,44 @@ Automated image-building factory of the Edge ecosystem. A web-based control plan
 
 ---
 
+## ✨ Recent Updates & Key System Features
+
+### 📦 1. Dual-Card Visual Package Manager
+The Web UI package selector divides packages into two interactive, searchable cards:
+- **EDGE PLATFORM PACKAGES & DEPENDENCIES (Cyan Theme)**: Dedicated card for all 19 Edge target suite chips (`edge-base`, `edge-target-tools`, `edge-python3-psuctl`, `edge-target-uralan`, `edge-target-kaskad4`, `edge-target-puma`, `edge-target-skif`, `edge-target-wspaces7`, `edge-target-wspaces9`, `edge-target-trc`, `edge-target-roadeye3`, `edge-target-edges`, `edge-target-edges4`, `edge-mvs`, `edge-timekeeper`, `edge-zabbix-agent`, etc.).
+- **STANDARD SYSTEM & CUSTOM APT PACKAGES (Amber Theme)**: Dedicated card for standard distribution utilities (`systemd`, `linux-image-amd64`, `nginx-full`, `openvpn`, `jq`, `rsyslog`, `usbutils`, `libmodbus5`, etc.).
+- Both cards merge dynamically into `recipe.packages` for full customization.
+
+### 🔒 2. HTTPS Repository Protocol & 301 Redirect Resolution
+- Official Edge repositories use `https://edge.vitcompany.com/repo/bookworm/stable` (and `testing`).
+- Solved silent APT package resolution failures caused by `HTTP 301 Moved Permanently` redirects during non-interactive chroot builds.
+- Includes automatic startup migration in `backend/main.py` that upgrades any existing database recipes from `http://` to `https://`.
+
+### ⚡ 3. Direct Pre-Download & Local Overlay Installer (`repo_downloader.py`)
+- Python-level package fetcher (`backend/core/repo_downloader.py`) parses `Packages.gz` indices from configured HTTPS repositories before `mkosi` runs.
+- Pre-downloads `edge-base` and selected `edge-*` platform `.deb` packages straight into `mkosi.extra/opt/edge_packages/`.
+- Installs packages deterministically inside the rootfs via `dpkg -i` during post-install execution, ensuring 0 reliance on host APT quirks.
+
+### 🏷️ 4. Dynamic Hostname from Active Port MAC Address
+- When `hostname_from_netif` is enabled, target system hostname is automatically set equal to the raw 12-character MAC address of the active network installation port in **lowercase without colons or delimiters** (e.g. `525400123456`).
+- Executes during post-installation and persists via `edge-firstboot.service` systemd unit.
+
+### 🏷️ 5. Strict Versioned Artifact Naming Rules (`-auto` Suffix)
+Both **ISO** installer and **RAW.XZ** disk image output artifacts strictly adhere to the unified versioned naming scheme:
+- **ISO Installer**: `edge_${EDGE_BASE_VERSION}_${ARCH}-${RELEASE}-auto.iso`
+  - *Example*: `edge_2026.3.0-18~testing+1371_amd64-bookworm-auto.iso`
+- **RAW.XZ Disk Image**: `edge_${EDGE_BASE_VERSION}_${ARCH}-${RELEASE}-auto.raw.xz`
+  - *Example*: `edge_2026.3.0-18~testing+1371_amd64-bookworm-auto.raw.xz`
+
+### 🧹 6. Log Stream Throttling & Workspace Purging
+- Real-time PTY stdout stream filtering in `backend/tasks/build_image.py` throttles repetitive percentage lines to 10% step increments.
+- `prepare_workspace` automatically purges stale script hooks (`mkosi.postinst`, `mkosi.finalize`, `mkosi.prepare`) before launching new builds.
+
+### 🌐 7. Multi-Language Support (i18n)
+- Full internationalization support in English (EN), Russian (RU), and Ukrainian (UK).
+
+---
+
 ## 🔌 Default Exposed Ports
 
 | Service | Container Port | Host Port | Notes |

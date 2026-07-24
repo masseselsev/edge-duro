@@ -99,7 +99,7 @@ if [ -n "$IFACE" ]; then
   MAC=$(cat /sys/class/net/$IFACE/address 2>/dev/null | tr -d ':' | tr '[:upper:]' '[:lower:]' | tail -c 7)
   if [ -n "$MAC" ]; then
     BASE_PREFIX=$(echo "{base_hn}" | tr '[:upper:]' '[:lower:]')
-    DYNAMIC_HN="${{BASE_PREFIX}}-${{MAC}}"
+    DYNAMIC_HN="${{BASE_PREFIX}}${{MAC}}"
     echo "Setting hostname to $DYNAMIC_HN (interface: $IFACE)"
     hostnamectl set-hostname "$DYNAMIC_HN" 2>/dev/null || echo "$DYNAMIC_HN" > /etc/hostname
     if [ -f /etc/hosts ]; then

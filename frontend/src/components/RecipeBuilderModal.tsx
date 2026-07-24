@@ -274,7 +274,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                   className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
                 />
                 <span className="text-[11px] text-zinc-400 font-medium">
-                  Set hostname from active network interface on first boot (e.g. <code className="text-amber-400 font-mono">{(hostname || 'edge-node').toLowerCase()}a1b2c3</code>)
+                  Set hostname to active installation port MAC address in post-install (lowercase, no delimiters, e.g. <code className="text-amber-400 font-mono">525400123456</code>)
                 </span>
               </label>
             </div>

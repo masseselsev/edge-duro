@@ -97,6 +97,27 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         tz = recipe.timezone.strip()
         postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime 2>/dev/null && echo \"{tz}\" > /etc/timezone 2>/dev/null || true")
 
+    hostname_mac_script = """
+# Auto-configure hostname to equal active network interface MAC address (strictly lowercase, no colons/delimiters)
+IFACE=$(ip -4 route show default 2>/dev/null | awk '/default/ {print $5}' | head -n 1)
+if [ -z "$IFACE" ]; then
+  IFACE=$(ip -o link show 2>/dev/null | awk -F': ' '$2 != "lo" {print $2; exit}')
+fi
+if [ -n "$IFACE" ]; then
+  MAC=$(cat /sys/class/net/$IFACE/address 2>/dev/null | tr -d ':' | tr '[:upper:]' '[:lower:]')
+  if [ -n "$MAC" ]; then
+    echo "Setting hostname to MAC address: $MAC (interface: $IFACE)"
+    hostnamectl set-hostname "$MAC" 2>/dev/null || echo "$MAC" > /etc/hostname
+    if [ -f /etc/hosts ]; then
+      sed -i "s/127.0.1.1.*/127.0.1.1\t$MAC/g" /etc/hosts 2>/dev/null || true
+    fi
+  fi
+fi
+"""
+
+    if recipe.hostname_from_netif:
+        postinst_commands.append(hostname_mac_script)
+
     if recipe.raw_postinst and recipe.raw_postinst.strip():
         postinst_commands.append(recipe.raw_postinst.strip())
 
@@ -110,26 +131,7 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     firstboot_lines = ["#!/bin/bash", "set -e"]
 
     if recipe.hostname_from_netif:
-        base_hn = (recipe.hostname or "edge-node").lower().strip()
-        firstboot_lines.append(f"""
-# Auto-configure hostname based on active network interface MAC (strictly lowercase)
-IFACE=$(ip -4 route show default 2>/dev/null | awk '/default/ {{print $5}}' | head -n 1)
-if [ -z "$IFACE" ]; then
-  IFACE=$(ip -o link show 2>/dev/null | awk -F': ' '$2 != "lo" {{print $2; exit}}')
-fi
-if [ -n "$IFACE" ]; then
-  MAC=$(cat /sys/class/net/$IFACE/address 2>/dev/null | tr -d ':' | tr '[:upper:]' '[:lower:]' | tail -c 7)
-  if [ -n "$MAC" ]; then
-    BASE_PREFIX=$(echo "{base_hn}" | tr '[:upper:]' '[:lower:]')
-    DYNAMIC_HN="${{BASE_PREFIX}}${{MAC}}"
-    echo "Setting hostname to $DYNAMIC_HN (interface: $IFACE)"
-    hostnamectl set-hostname "$DYNAMIC_HN" 2>/dev/null || echo "$DYNAMIC_HN" > /etc/hostname
-    if [ -f /etc/hosts ]; then
-      sed -i "s/127.0.1.1.*/127.0.1.1\t$DYNAMIC_HN/g" /etc/hosts 2>/dev/null || true
-    fi
-  fi
-fi
-""")
+        firstboot_lines.append(hostname_mac_script)
 
     if recipe.raw_firstboot and recipe.raw_firstboot.strip():
         firstboot_lines.append(recipe.raw_firstboot.strip())

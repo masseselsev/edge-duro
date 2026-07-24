@@ -60,11 +60,23 @@ def build_image_task(self, build_id: str, recipe_id: int):
             cwd=ws_path
         )
 
+        last_progress_pct = -1
         if process.stdout:
             for line in iter(process.stdout.readline, ""):
                 clean_line = line.rstrip("\r\n").strip()
                 if not clean_line:
                     continue
+
+                if "repart-definitions" in clean_line or ("/" in clean_line and "%" in clean_line):
+                    import re
+                    match = re.search(r'(\d+)%', clean_line)
+                    if match:
+                        pct = int(match.group(1))
+                        if pct % 10 == 0 and pct != last_progress_pct:
+                            last_progress_pct = pct
+                            log_to_task(build_id, clean_line)
+                        continue
+
                 log_to_task(build_id, clean_line)
 
                 # Check if build was cancelled via API

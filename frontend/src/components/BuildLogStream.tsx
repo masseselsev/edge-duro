@@ -51,11 +51,11 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     return () => clearInterval(mInterval);
   }, []);
 
-  const fetchBuildStatus = () => {
+  const fetchBuildStatus = (updateLogs: boolean = false) => {
     fetch(`/api/builds/${buildId}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.log_output) {
+        if (data.log_output && updateLogs) {
           setLogs(data.log_output.split('\n'));
         }
         if (data.status) {
@@ -72,12 +72,13 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   };
 
   useEffect(() => {
-    fetchBuildStatus();
+    // Initial fetch including full logs
+    fetchBuildStatus(true);
 
-    // Polling while build is running or pending
+    // Polling build status only (without resetting logs array)
     const pollInterval = setInterval(() => {
-      fetchBuildStatus();
-    }, 1500);
+      fetchBuildStatus(false);
+    }, 2000);
 
     // Connect SSE stream for realtime line appends
     const eventSource = new EventSource(`/api/builds/${buildId}/stream`);
@@ -88,7 +89,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
         setHasIso(true);
       }
       if (event.data.includes('[SYSTEM] Build and ISO generation completed') || event.data.includes('Build completed successfully')) {
-        fetchBuildStatus();
+        fetchBuildStatus(false);
       }
     });
 

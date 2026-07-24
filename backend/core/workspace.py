@@ -128,11 +128,15 @@ if [ -w /etc/resolv.conf ] || [ ! -f /etc/resolv.conf ]; then
   echo "nameserver 8.8.8.8" >> /etc/resolv.conf 2>/dev/null || true
 fi
 
+# Ensure dpkg directory structure exists and disable lock checks
+mkdir -p /var/lib/dpkg/updates /var/lib/apt/lists /var/cache/apt/archives
+touch /var/lib/dpkg/status /var/lib/dpkg/available
+
 # Install Edge & custom repository packages inside chroot
 if command -v apt-get >/dev/null 2>&1; then
   echo "[POSTINST] Installing Edge platform packages: {edge_pkgs_str}..."
-  apt-get update --allow-insecure-repositories --allow-unauthenticated || true
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated {edge_pkgs_str}
+  apt-get -o Debug::NoLocking=true update --allow-insecure-repositories --allow-unauthenticated || true
+  DEBIAN_FRONTEND=noninteractive apt-get -o Debug::NoLocking=true install -y --allow-unauthenticated {edge_pkgs_str}
 fi
 """)
 

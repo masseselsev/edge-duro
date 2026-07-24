@@ -149,18 +149,35 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           {logs.length === 0 ? (
             <div className="text-zinc-600 italic">Waiting for live build output stream...</div>
           ) : (
-            logs.map((line, i) => (
-              <div
-                key={i}
-                className={
-                  line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
-                  line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :
-                  line.includes('[EXEC]') || line.includes('[ISO EXEC]') ? 'text-cyan-400' : 'text-zinc-300'
+            (() => {
+              const isProgressLine = (str: string): boolean => {
+                return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(str) ||
+                       /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(str);
+              };
+
+              const displayLogs: string[] = [];
+              for (const line of logs) {
+                if (!line || !line.trim()) continue;
+                if (displayLogs.length > 0 && isProgressLine(line) && isProgressLine(displayLogs[displayLogs.length - 1])) {
+                  displayLogs[displayLogs.length - 1] = line;
+                } else {
+                  displayLogs.push(line);
                 }
-              >
-                {line}
-              </div>
-            ))
+              }
+
+              return displayLogs.map((line, i) => (
+                <div
+                  key={i}
+                  className={
+                    line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
+                    line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :
+                    line.includes('[EXEC]') || line.includes('[ISO EXEC]') ? 'text-cyan-400' : 'text-zinc-300'
+                  }
+                >
+                  {line}
+                </div>
+              ));
+            })()
           )}
           <div ref={logEndRef} />
         </div>

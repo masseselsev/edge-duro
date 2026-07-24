@@ -150,11 +150,6 @@ d-i netcfg/get_domain string local
 
     postinst_content = """update-locale LANG=C.UTF-8
 rm -f /etc/machine-id
-
-cat << 'EOF' > /etc/apt/sources.list.d/edge.list
-deb http://edge.vitcompany.com/repo/bookworm/stable bookworm main
-#deb http://edge.vitcompany.com/repo/bookworm/testing bookworm main
-EOF
 """
 
     firstboot_content = """#!/bin/sh

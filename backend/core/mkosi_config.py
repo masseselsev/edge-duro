@@ -6,7 +6,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     """
     Generates mkosi.conf configuration for systemd image builder.
     """
-    packages_str = " ".join(recipe.packages) if recipe.packages else "systemd systemd-sysv dbus iproute2"
+    pkgs = recipe.packages if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
+    packages_formatted = "\n    ".join(pkgs)
 
     arch_map = {
         "amd64": "x86-64",
@@ -38,14 +39,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "CacheDirectory=/opt/data/duro_workspace/cache",
         "",
         "[Content]",
-        f"Packages={packages_str}",
+        f"Packages=\n    {packages_formatted}",
         "Autologin=yes",
     ]
 
     if recipe.kernel_params and recipe.kernel_params.strip():
         config_lines.append(f"KernelCommandLine={recipe.kernel_params.strip()}")
-
-
 
     if recipe.raw_mkosi_conf and recipe.raw_mkosi_conf.strip():
         config_lines.append("\n# Custom Raw Override")

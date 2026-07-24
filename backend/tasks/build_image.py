@@ -103,14 +103,13 @@ def build_image_task(self, build_id: str, recipe_id: int):
                     if not clean_line:
                         continue
 
-                    if "repart-definitions" in clean_line or ("/" in clean_line and "%" in clean_line):
-                        match = re.search(r'(\d+)%', clean_line)
-                        if match:
-                            pct = int(match.group(1))
-                            if pct % 10 == 0 and pct != last_progress_pct:
-                                last_progress_pct = pct
-                                log_to_task(build_id, clean_line)
-                            continue
+                    pct_match = re.search(r'(\d+)%', clean_line)
+                    if pct_match:
+                        pct = int(pct_match.group(1))
+                        if pct % 10 == 0 and pct != last_progress_pct:
+                            last_progress_pct = pct
+                            log_to_task(build_id, clean_line)
+                        continue
 
                     log_to_task(build_id, clean_line)
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Terminal, X, Circle, Download, CheckCircle2, Disc } from 'lucide-react';
+import { Terminal, X, Circle, Download, CheckCircle2, Disc, ArrowDown, ArrowUp } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
 interface BuildLogStreamProps {
@@ -9,13 +9,47 @@ interface BuildLogStreamProps {
   onClose: () => void;
 }
 
+interface SystemMetrics {
+  cpu_usage: number;
+  ram_usage: number;
+  rx_speed: number;
+  tx_speed: number;
+  rx_percent: number;
+  tx_percent: number;
+}
+
+const formatSpeed = (bytesPerSec: number): string => {
+  if (!bytesPerSec || bytesPerSec < 1024) return `${(bytesPerSec || 0).toFixed(0)} B/s`;
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`;
+  if (bytesPerSec < 1024 * 1024 * 1024) return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+  return `${(bytesPerSec / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
+};
+
 export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLogStreamProps) {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('PENDING');
   const [hasIso, setHasIso] = useState<boolean>(false);
   const [hasRaw, setHasRaw] = useState<boolean>(false);
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const res = await fetch('/api/system/metrics');
+        if (res.ok) {
+          const data = await res.json();
+          setMetrics(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchMetrics();
+    const mInterval = setInterval(fetchMetrics, 3000);
+    return () => clearInterval(mInterval);
+  }, []);
 
   const fetchBuildStatus = () => {
     fetch(`/api/builds/${buildId}`)
@@ -110,6 +144,35 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
               <p className="text-[10px] text-zinc-500 font-mono">ID: {buildId}</p>
             </div>
           </div>
+
+          {/* Server Metrics Badge in Console Header */}
+          {metrics && (
+            <div className="hidden sm:flex items-center gap-2.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-2.5 py-1 shadow-inner text-[10px] font-mono">
+              <div className="flex items-center gap-1" title="CPU Utilization">
+                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">CPU</span>
+                <span className="font-semibold text-emerald-400">{metrics.cpu_usage.toFixed(0)}%</span>
+              </div>
+              <div className="w-px h-2.5 bg-zinc-800" />
+              <div className="flex items-center gap-1" title="RAM Utilization">
+                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RAM</span>
+                <span className="font-semibold text-emerald-400">{metrics.ram_usage.toFixed(0)}%</span>
+              </div>
+              <div className="w-px h-2.5 bg-zinc-800" />
+              <div className="flex items-center gap-1" title="Download Speed">
+                <ArrowDown size={11} className={metrics.rx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
+                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RX</span>
+                <span className="font-semibold text-emerald-400">{formatSpeed(metrics.rx_speed)}</span>
+                <span className="text-[8.5px] text-emerald-400">({metrics.rx_percent.toFixed(1)}%)</span>
+              </div>
+              <div className="w-px h-2.5 bg-zinc-800" />
+              <div className="flex items-center gap-1" title="Upload Speed">
+                <ArrowUp size={11} className={metrics.tx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
+                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">TX</span>
+                <span className="font-semibold text-emerald-400">{formatSpeed(metrics.tx_speed)}</span>
+                <span className="text-[8.5px] text-emerald-400">({metrics.tx_percent.toFixed(1)}%)</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             {/* Download Buttons for available formats */}

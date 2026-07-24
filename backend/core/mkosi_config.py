@@ -9,6 +9,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
     if "systemd-boot" not in pkgs:
         pkgs.append("systemd-boot")
+    if "edge-base" not in pkgs:
+        pkgs.append("edge-base")
     packages_formatted = "\n    ".join(pkgs)
 
     arch_map = {

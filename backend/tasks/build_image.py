@@ -49,65 +49,90 @@ def build_image_task(self, build_id: str, recipe_id: int):
             cmd = ["echo", "[SIMULATION] Built OS image successfully."]
         else:
             cmd = ["mkosi", "--directory", ws_path, "--force", "build"]
-            if stdbuf_bin:
-                cmd = ["stdbuf", "-oL", "-eL"] + cmd
 
         log_to_task(build_id, f"[EXEC] {' '.join(cmd)}")
 
         proc_env = os.environ.copy()
         proc_env["PYTHONUNBUFFERED"] = "1"
         proc_env["PYTHONIOENCODING"] = "utf-8"
+        proc_env["TERM"] = "xterm-256color"
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=0,
-            cwd=ws_path,
-            env=proc_env
-        )
+        import pty
+        import re
 
+        ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        master_fd, slave_fd = pty.openpty()
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                cwd=ws_path,
+                env=proc_env,
+                close_fds=True
+            )
+        finally:
+            os.close(slave_fd)
+
+        master_file = os.fdopen(master_fd, 'rb', buffering=0)
         last_progress_pct = -1
         last_cancel_check = 0.0
-        if process.stdout:
-            while True:
-                line_bytes = process.stdout.readline()
-                if not line_bytes:
-                    break
-                try:
-                    clean_line = line_bytes.decode('utf-8', errors='replace').rstrip("\r\n").strip()
-                except Exception:
-                    continue
-                if not clean_line:
-                    continue
+        line_buffer = b""
 
-                if "repart-definitions" in clean_line or ("/" in clean_line and "%" in clean_line):
-                    import re
-                    match = re.search(r'(\d+)%', clean_line)
-                    if match:
-                        pct = int(match.group(1))
-                        if pct % 10 == 0 and pct != last_progress_pct:
-                            last_progress_pct = pct
-                            log_to_task(build_id, clean_line)
+        while True:
+            try:
+                chunk = master_file.read(1024)
+                if not chunk:
+                    break
+                line_buffer += chunk
+
+                while b"\n" in line_buffer or b"\r" in line_buffer:
+                    pos_n = line_buffer.find(b"\n")
+                    pos_r = line_buffer.find(b"\r")
+                    if pos_n != -1 and (pos_r == -1 or pos_n < pos_r):
+                        pos = pos_n
+                    else:
+                        pos = pos_r
+
+                    raw_line = line_buffer[:pos]
+                    line_buffer = line_buffer[pos + 1:]
+
+                    clean_line = raw_line.decode('utf-8', errors='replace')
+                    clean_line = ANSI_ESCAPE.sub('', clean_line).strip()
+                    if not clean_line:
                         continue
 
-                log_to_task(build_id, clean_line)
+                    if "repart-definitions" in clean_line or ("/" in clean_line and "%" in clean_line):
+                        match = re.search(r'(\d+)%', clean_line)
+                        if match:
+                            pct = int(match.group(1))
+                            if pct % 10 == 0 and pct != last_progress_pct:
+                                last_progress_pct = pct
+                                log_to_task(build_id, clean_line)
+                            continue
 
-                # Check if build was cancelled via API (throttled to once every 3s)
-                now = time.time()
-                if now - last_cancel_check > 3.0:
-                    last_cancel_check = now
-                    try:
-                        db.refresh(build)
-                        if build.status == "CANCELLED":
-                            log_to_task(build_id, "[SYSTEM] Process termination requested by user. Terminating mkosi...")
-                            process.terminate()
-                            process.wait(timeout=5)
-                            return
-                    except Exception:
-                        pass
+                    log_to_task(build_id, clean_line)
 
-            process.stdout.close()
+                    # Check if build was cancelled via API (throttled to once every 3s)
+                    now = time.time()
+                    if now - last_cancel_check > 3.0:
+                        last_cancel_check = now
+                        try:
+                            db.refresh(build)
+                            if build.status == "CANCELLED":
+                                log_to_task(build_id, "[SYSTEM] Process termination requested by user. Terminating mkosi...")
+                                process.terminate()
+                                process.wait(timeout=5)
+                                master_file.close()
+                                return
+                        except Exception:
+                            pass
+
+            except Exception:
+                break
+
+        master_file.close()
 
         return_code = process.wait()
         if return_code != 0 and mkosi_bin:

@@ -122,6 +122,20 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     if custom_edge_pkgs:
         edge_pkgs_str = " ".join(custom_edge_pkgs)
         postinst_commands.append(f"""
+# Configure DNS resolution inside postinst chroot container
+if [ ! -s /etc/resolv.conf ] || ! grep -q "nameserver" /etc/resolv.conf 2>/dev/null; then
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+fi
+
+# Ensure custom.list exists in /etc/apt/sources.list.d
+mkdir -p /etc/apt/sources.list.d
+if [ ! -f /etc/apt/sources.list.d/custom.list ]; then
+  cat << 'EOF' > /etc/apt/sources.list.d/custom.list
+{"\n".join(repo_lines)}
+EOF
+fi
+
 # Install Edge & custom repository packages inside chroot
 if command -v apt-get >/dev/null 2>&1; then
   echo "[POSTINST] Installing Edge platform packages: {edge_pkgs_str}..."

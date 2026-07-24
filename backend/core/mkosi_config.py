@@ -61,6 +61,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "CacheDirectory=/opt/data/duro_workspace/cache",
         "WorkspaceDirectory=/opt/data/duro_workspace/mkosi_work",
         "BuildSources=",
+        "WithNetwork=yes",
         "",
         "[Output]",
         f"ImageId={recipe.name.lower().replace(' ', '_')}",

@@ -159,10 +159,12 @@ fi
         postinst_commands.append(recipe.raw_postinst.strip())
 
     if len(postinst_commands) > 1:
-        postinst_path = os.path.join(workspace_path, "mkosi.postinst.chroot")
-        with open(postinst_path, "w") as f:
-            f.write("#!/bin/bash\nset -e\n" + "\n".join(postinst_commands) + "\n")
-        os.chmod(postinst_path, 0o755)
+        postinst_content = "#!/bin/bash\nset -e\n" + "\n".join(postinst_commands) + "\n"
+        for hook_name in ["mkosi.postinst", "mkosi.postinst.chroot", "mkosi.finalize", "mkosi.finalize.chroot"]:
+            h_path = os.path.join(workspace_path, hook_name)
+            with open(h_path, "w") as f:
+                f.write(postinst_content)
+            os.chmod(h_path, 0o755)
 
     # 5. Firstboot script & systemd service
     firstboot_lines = ["#!/bin/bash", "set -e"]

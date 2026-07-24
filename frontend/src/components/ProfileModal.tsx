@@ -147,6 +147,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -119,6 +119,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           <div ref={logEndRef} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

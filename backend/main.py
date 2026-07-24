@@ -16,6 +16,7 @@ from routers import recipes as recipes_router
 from routers import builds as builds_router
 from routers import assets as assets_router
 from routers import repositories as repositories_router
+from routers import storage as storage_router
 
 app = FastAPI(title="Edge-D.U.R.O. API", version=VERSION)
 
@@ -34,6 +35,7 @@ app.include_router(recipes_router.router)
 app.include_router(builds_router.router)
 app.include_router(assets_router.router)
 app.include_router(repositories_router.router)
+app.include_router(storage_router.router)
 
 
 @app.on_event("startup")

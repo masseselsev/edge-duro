@@ -28,8 +28,20 @@ export const translations: Record<Language, Record<string, string>> = {
     // Tabs
     tabRecipes: 'Image Recipes',
     tabBuilds: 'Build History',
+    tabStorage: 'Storage',
     tabSettings: 'Settings',
     tabLogs: 'Logs',
+
+    // Storage Manager
+    storageTitle: 'Image Artifact Storage',
+    storageSubtitle: 'Manage, inspect, and delete built OS image files from disk storage',
+    totalArtifacts: 'Total Artifacts',
+    totalStorageUsed: 'Total Storage Used',
+    freeStorageAvailable: 'Free Disk Space',
+    deleteSelected: 'Delete Selected ({count})',
+    confirmDeleteFile: 'Are you sure you want to delete file "{name}" from server storage?',
+    confirmBulkDelete: 'Are you sure you want to delete {count} selected artifact files from server storage?',
+    noArtifactsInStorage: 'No image artifacts found in storage directory.',
 
     // Recipes Tab & Builder Modal
     createRecipe: 'Create New Recipe',
@@ -135,8 +147,19 @@ export const translations: Record<Language, Record<string, string>> = {
 
     tabRecipes: 'Рецепты образов',
     tabBuilds: 'История сборок',
+    tabStorage: 'Хранилище образов',
     tabSettings: 'Настройки',
     tabLogs: 'Журналы',
+
+    storageTitle: 'Хранилище скомпилированных образов ОС',
+    storageSubtitle: 'Управление, просмотр и ручное удаление файлов скомпилированных образов с диска',
+    totalArtifacts: 'Всего артефактов',
+    totalStorageUsed: 'Занято на диске',
+    freeStorageAvailable: 'Свободно на диске',
+    deleteSelected: 'Удалить выбранные ({count})',
+    confirmDeleteFile: 'Вы уверены, что хотите вручную удалить файл "{name}" с диска сервера?',
+    confirmBulkDelete: 'Вы уверены, что хотите удалить выбранные файлы ({count} шт.) с диска сервера?',
+    noArtifactsInStorage: 'Файлы образов в директории хранилища не найдены.',
 
     createRecipe: 'Создать новый рецепт',
     editRecipe: 'Редактировать рецепт',
@@ -236,8 +259,19 @@ export const translations: Record<Language, Record<string, string>> = {
 
     tabRecipes: 'Рецепти образів',
     tabBuilds: 'Історія збірок',
+    tabStorage: 'Сховище образів',
     tabSettings: 'Налаштування',
     tabLogs: 'Журнали',
+
+    storageTitle: 'Сховище скомпільованих образів ОС',
+    storageSubtitle: 'Управління, перегляд та ручне видалення файлів скомпільованих образів з диска',
+    totalArtifacts: 'Всього артефактів',
+    totalStorageUsed: 'Зайнято на диску',
+    freeStorageAvailable: 'Вільне місце на диску',
+    deleteSelected: 'Видалити обрані ({count})',
+    confirmDeleteFile: 'Ви впевнені, що хочете вручну видалити файл "{name}" з диска сервера?',
+    confirmBulkDelete: 'Ви впевнені, що хочете видалити обрані файли ({count} шт.) з диска сервера?',
+    noArtifactsInStorage: 'Файли образів у директорії сховища не знайдені.',
 
     createRecipe: 'Створити новий рецепт',
     editRecipe: 'Редагувати рецепт',

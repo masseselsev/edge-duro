@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Flame, History, Settings as Gear, Terminal, Sun, Moon, User, Loader2, BookOpen, ArrowDown, ArrowUp } from 'lucide-react';
+import { Flame, History, Settings as Gear, Terminal, Sun, Moon, User, Loader2, BookOpen, ArrowDown, ArrowUp, HardDrive } from 'lucide-react';
 import RecipesTab from './components/RecipesTab';
 import BuildsTab from './components/BuildsTab';
+import StorageTab from './components/StorageTab';
 import SettingsTab from './components/SettingsTab';
 import LogsTab from './components/LogsTab';
 import Login from './components/Login';
@@ -11,7 +12,7 @@ import MainFooter from './components/MainFooter';
 import BuildLogStream from './components/BuildLogStream';
 import { TranslationProvider, useTranslation } from './context/TranslationContext';
 
-type Tab = 'recipes' | 'builds' | 'settings' | 'logs';
+type Tab = 'recipes' | 'builds' | 'storage' | 'settings' | 'logs';
 
 interface SystemMetrics {
   cpu_usage: number;
@@ -160,6 +161,8 @@ function AppContent() {
     switch (activeTab) {
       case 'builds':
         return <BuildsTab />;
+      case 'storage':
+        return <StorageTab />;
       case 'settings':
         return <SettingsTab onSettingsUpdated={setSettings} />;
       case 'logs':
@@ -332,6 +335,17 @@ function AppContent() {
               >
                 <History size={13} className="text-amber-400" />
                 <span>{t('tabBuilds')}</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('storage')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  activeTab === 'storage'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    : 'text-zinc-400 hover:text-zinc-100'
+                }`}
+              >
+                <HardDrive size={13} className="text-amber-400" />
+                <span>{t('tabStorage')}</span>
               </button>
               <button
                 onClick={() => setActiveTab('logs')}

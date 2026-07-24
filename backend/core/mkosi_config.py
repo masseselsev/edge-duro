@@ -6,7 +6,9 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     """
     Generates mkosi.conf configuration for systemd image builder.
     """
-    pkgs = recipe.packages if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
+    pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
+    if "systemd-boot" not in pkgs:
+        pkgs.append("systemd-boot")
     packages_formatted = "\n    ".join(pkgs)
 
     arch_map = {

@@ -174,7 +174,7 @@ log "DONE"
             architecture="amd64",
             output_formats=["raw_xz", "iso"],
             packages=[
-                "systemd", "systemd-sysv", "dbus", "iproute2", "curl", "wget",
+                "systemd", "systemd-sysv", "systemd-boot", "dbus", "iproute2", "curl", "wget",
                 "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
                 "linux-image-amd64", "net-tools", "sudo", "ca-certificates", "locales"
             ],

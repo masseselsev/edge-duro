@@ -53,6 +53,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [packages, setPackages] = useState<string[]>(recipe?.packages || []);
   const [repositories, setRepositories] = useState<AptRepo[]>(recipe?.repositories || []);
   const [hostname, setHostname] = useState(recipe?.hostname || 'edge-node');
+  const [hostnameFromNetif, setHostnameFromNetif] = useState<boolean>(recipe?.hostname_from_netif || false);
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
@@ -93,6 +94,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       packages,
       repositories,
       hostname: hostname.trim() || 'edge-node',
+      hostname_from_netif: hostnameFromNetif,
       timezone: timezone || 'UTC',
       ssh_keys: parsedKeys,
       kernel_params: kernelParams.trim() || null,
@@ -264,6 +266,17 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 onChange={(e) => setHostname(e.target.value)}
                 className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
               />
+              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hostnameFromNetif}
+                  onChange={(e) => setHostnameFromNetif(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+                />
+                <span className="text-[11px] text-zinc-400 font-medium">
+                  Set hostname from active network interface on first boot (e.g. <code className="text-amber-400 font-mono">{hostname || 'edge-node'}-a1b2c3</code>)
+                </span>
+              </label>
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Target OS Timezone</label>

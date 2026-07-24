@@ -52,6 +52,7 @@ class Recipe(Base):
     # list of dicts: [{"name": "...", "url": "...", "suite": "...", "components": "...", "gpg_key_filename": "..."}]
 
     hostname = Column(String, default="edge-node", nullable=False)
+    hostname_from_netif = Column(Boolean, default=False, nullable=False)
     timezone = Column(String, default="UTC", nullable=False)
     network_config = Column(JSON, nullable=True)
     ssh_keys = Column(JSON, nullable=False, default=list)

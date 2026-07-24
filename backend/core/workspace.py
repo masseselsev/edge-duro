@@ -85,12 +85,38 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service
+    firstboot_lines = ["#!/bin/bash", "set -e"]
+
+    if recipe.hostname_from_netif:
+        base_hn = recipe.hostname or "edge-node"
+        firstboot_lines.append(f"""
+# Auto-configure hostname based on active network interface MAC
+IFACE=$(ip -4 route show default 2>/dev/null | awk '/default/ {{print $5}}' | head -n 1)
+if [ -z "$IFACE" ]; then
+  IFACE=$(ip -o link show 2>/dev/null | awk -F': ' '$2 != "lo" {{print $2; exit}}')
+fi
+if [ -n "$IFACE" ]; then
+  MAC=$(cat /sys/class/net/$IFACE/address 2>/dev/null | tr -d ':' | tr '[:upper:]' '[:lower:]' | tail -c 7)
+  if [ -n "$MAC" ]; then
+    DYNAMIC_HN="{base_hn}-$MAC"
+    echo "Setting hostname to $DYNAMIC_HN (interface: $IFACE)"
+    hostnamectl set-hostname "$DYNAMIC_HN" 2>/dev/null || echo "$DYNAMIC_HN" > /etc/hostname
+    if [ -f /etc/hosts ]; then
+      sed -i "s/127.0.1.1.*/127.0.1.1\t$DYNAMIC_HN/g" /etc/hosts 2>/dev/null || true
+    fi
+  fi
+fi
+""")
+
     if recipe.raw_firstboot and recipe.raw_firstboot.strip():
+        firstboot_lines.append(recipe.raw_firstboot.strip())
+
+    if len(firstboot_lines) > 2:
         fb_bin_dir = os.path.join(extra_dir, "opt", "edge", "bin")
         os.makedirs(fb_bin_dir, exist_ok=True)
         fb_script_path = os.path.join(fb_bin_dir, "firstboot.sh")
         with open(fb_script_path, "w") as f:
-            f.write(recipe.raw_firstboot.strip() + "\n")
+            f.write("\n".join(firstboot_lines) + "\n")
         os.chmod(fb_script_path, 0o755)
 
         systemd_dir = os.path.join(extra_dir, "etc", "systemd", "system")
@@ -99,8 +125,8 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         with open(fb_svc_path, "w") as f:
             f.write("""[Unit]
 Description=Edge Firstboot Initialization Service
-ConditionFirstBoot=yes
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
@@ -111,12 +137,12 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 """)
 
-        wants_dir = os.path.join(systemd_dir, "multi-user.target.wants")
+        wants_dir = os.path.join(extra_dir, "etc", "systemd", "system", "multi-user.target.wants")
         os.makedirs(wants_dir, exist_ok=True)
-        symlink_path = os.path.join(wants_dir, "edge-firstboot.service")
-        if not os.path.exists(symlink_path):
+        link_path = os.path.join(wants_dir, "edge-firstboot.service")
+        if not os.path.exists(link_path):
             try:
-                os.symlink("../edge-firstboot.service", symlink_path)
+                os.symlink("/etc/systemd/system/edge-firstboot.service", link_path)
             except Exception:
                 pass
 

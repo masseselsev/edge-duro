@@ -95,6 +95,7 @@ class RecipeBase(BaseModel):
     packages: List[str] = Field(default_factory=list)
     repositories: List[AptRepositorySchema] = Field(default_factory=list)
     hostname: str = Field(default="edge-node")
+    hostname_from_netif: bool = Field(default=False)
     timezone: str = Field(default="UTC")
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)

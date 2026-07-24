@@ -211,31 +211,32 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                     </button>
                   )}
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => {
-                      setActiveModalRecipe(recipe);
-                      setShowModal(true);
-                    }}
-                    className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-                    title={t('editRecipe')}
-                  >
-                    <Edit size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleClone(recipe.id)}
-                    className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-                    title={t('cloneRecipe')}
-                  >
-                    <Copy size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(recipe)}
-                    className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                    title={t('delete')}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setActiveModalRecipe(recipe);
+                        setShowModal(true);
+                      }}
+                      className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                      title={t('editRecipe')}
+                    >
+                      <Edit size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleClone(recipe.id)}
+                      className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                      title={t('cloneRecipe')}
+                    >
+                      <Copy size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(recipe)}
+                      className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                      title={t('delete')}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

@@ -76,6 +76,12 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
 
+    # 3.5. Prepare script (runs apt-get update inside buildroot before package installation)
+    prepare_path = os.path.join(workspace_path, "mkosi.prepare.chroot")
+    with open(prepare_path, "w") as f:
+        f.write("#!/bin/bash\nset -e\napt-get update --allow-insecure-repositories || apt-get update || true\n")
+    os.chmod(prepare_path, 0o755)
+
     # 4. Post-install script hook & timezone setup
     postinst_commands = []
     if recipe.timezone and recipe.timezone.strip():

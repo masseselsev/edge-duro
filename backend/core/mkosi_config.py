@@ -17,11 +17,19 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     }
     mkosi_arch = arch_map.get((recipe.architecture or "amd64").lower(), "x86-64")
 
+    if (recipe.distribution or "").lower() == "debian":
+        components = "main contrib non-free non-free-firmware"
+    elif (recipe.distribution or "").lower() == "ubuntu":
+        components = "main restricted universe multiverse"
+    else:
+        components = "main"
+
     config_lines = [
         "[Distribution]",
         f"Distribution={recipe.distribution}",
         f"Release={recipe.release}",
         f"Architecture={mkosi_arch}",
+        f"Repositories={components}",
         "",
         "[Output]",
         f"ImageId={recipe.name.lower().replace(' ', '_')}",

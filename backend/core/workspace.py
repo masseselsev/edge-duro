@@ -79,19 +79,21 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     # 3.5. Prepare script (runs apt-get update inside buildroot before package installation)
     prepare_path = os.path.join(workspace_path, "mkosi.prepare.chroot")
     with open(prepare_path, "w") as f:
-        f.write("#!/bin/bash\nset -e\napt-get update --allow-insecure-repositories || apt-get update || true\n")
+        f.write("#!/bin/bash\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH\nif command -v apt-get >/dev/null 2>&1; then\n  apt-get update --allow-insecure-repositories || apt-get update || true\nfi\n")
     os.chmod(prepare_path, 0o755)
 
     # 4. Post-install script hook & timezone setup
-    postinst_commands = []
+    postinst_commands = [
+        "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+    ]
     if recipe.timezone and recipe.timezone.strip():
         tz = recipe.timezone.strip()
-        postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime && echo \"{tz}\" > /etc/timezone")
+        postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime 2>/dev/null && echo \"{tz}\" > /etc/timezone 2>/dev/null || true")
 
     if recipe.raw_postinst and recipe.raw_postinst.strip():
         postinst_commands.append(recipe.raw_postinst.strip())
 
-    if postinst_commands:
+    if len(postinst_commands) > 1:
         postinst_path = os.path.join(workspace_path, "mkosi.postinst.chroot")
         with open(postinst_path, "w") as f:
             f.write("#!/bin/bash\nset -e\n" + "\n".join(postinst_commands) + "\n")

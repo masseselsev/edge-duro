@@ -150,7 +150,7 @@ d-i netcfg/get_hostname string edge-node
 d-i netcfg/get_domain string local
 """
 
-    postinst_content = """update-locale LANG=C.UTF-8
+    postinst_content = """command -v update-locale >/dev/null 2>&1 && update-locale LANG=C.UTF-8 || true
 rm -f /etc/machine-id
 """
 
@@ -176,7 +176,7 @@ log "DONE"
             packages=[
                 "systemd", "systemd-sysv", "dbus", "iproute2", "curl", "wget",
                 "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
-                "linux-image-amd64", "net-tools", "sudo", "ca-certificates"
+                "linux-image-amd64", "net-tools", "sudo", "ca-certificates", "locales"
             ],
             repositories=repos_spec,
             hostname="edge-node",

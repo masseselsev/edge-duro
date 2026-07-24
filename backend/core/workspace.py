@@ -42,6 +42,13 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         with open(auth_keys_path, "w") as f:
             f.write("\n".join(recipe.ssh_keys) + "\n")
 
+    # 1.5. Static Hostname Overlay
+    if recipe.hostname:
+        etc_dir = os.path.join(extra_dir, "etc")
+        os.makedirs(etc_dir, exist_ok=True)
+        with open(os.path.join(etc_dir, "hostname"), "w") as f:
+            f.write(recipe.hostname.strip().lower() + "\n")
+
     # 2. Custom APT Repositories
     if recipe.repositories:
         sources_dir = os.path.join(extra_dir, "etc", "apt", "sources.list.d")

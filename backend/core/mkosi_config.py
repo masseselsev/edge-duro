@@ -30,7 +30,6 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "",
         "[Content]",
         f"Packages={packages_str}",
-        f"HostName={recipe.hostname}",
         "Autologin=yes",
     ]
 

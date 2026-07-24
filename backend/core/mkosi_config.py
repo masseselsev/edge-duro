@@ -37,12 +37,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     sources_lines = []
     rel = recipe.release or "bookworm"
 
-    # 1. Edge Vitcompany corporate APT repositories
-    if (recipe.distribution or "").lower() == "debian":
-        sources_lines.append(f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/stable {rel} main")
-        sources_lines.append(f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/testing {rel} main")
-
-    # 2. Custom APT repositories configured in Recipe UI
+    # Custom APT repositories configured in Recipe UI
     if recipe.repositories and isinstance(recipe.repositories, list):
         for repo in recipe.repositories:
             if isinstance(repo, dict) and repo.get("url"):
@@ -63,11 +58,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         f"Repositories={components}",
     ]
 
-    # Add RepositoryUrl lines for initial bootstrap stage
-    if (recipe.distribution or "").lower() == "debian":
-        config_lines.append(f"RepositoryUrl=http://edge.vitcompany.com/repo/{rel}/stable")
-        config_lines.append(f"RepositoryUrl=http://edge.vitcompany.com/repo/{rel}/testing")
-
+    # Add RepositoryUrl lines for initial bootstrap stage from recipe.repositories
     if recipe.repositories and isinstance(recipe.repositories, list):
         for repo in recipe.repositories:
             if isinstance(repo, dict) and repo.get("url"):

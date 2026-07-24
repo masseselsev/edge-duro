@@ -91,9 +91,7 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         'CACHE_DIR="/opt/data/duro_workspace/cache/apt"',
         'mkdir -p "$CACHE_DIR"',
         "mkdir -p /etc/apt/sources.list.d",
-        "cat << 'EOF' > /etc/apt/sources.list.d/custom.list",
-        f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/stable {rel} main",
-        f"deb [trusted=yes] http://edge.vitcompany.com/repo/{rel}/testing {rel} main"
+        "cat << 'EOF' > /etc/apt/sources.list.d/custom.list"
     ]
 
     if recipe.repositories and isinstance(recipe.repositories, list):

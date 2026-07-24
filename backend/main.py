@@ -101,11 +101,33 @@ def seed_superadmin(db: Session):
 
 def seed_default_debian12_recipe(db: Session):
     """
-    Seeds default Debian 12 Bookworm base recipe if no recipe with this name exists.
+    Seeds/updates default Debian 12 Bookworm base recipe with official Edge vitcompany repositories.
     """
-    existing = db.query(models.Recipe).filter(models.Recipe.name == "Debian 12 Bookworm (Edge Base)").first()
-    if not existing:
-        preseed_content = """# Debian Installer Preseed Configuration for Edge Debian 12
+    repos_spec = [
+        {
+            "name": "debian-main",
+            "url": "http://deb.debian.org/debian",
+            "suite": "bookworm",
+            "components": "main contrib non-free non-free-firmware",
+            "gpg_key_filename": "debian-archive-bookworm.gpg"
+        },
+        {
+            "name": "edge-stable",
+            "url": "http://edge.vitcompany.com/repo/bookworm/stable",
+            "suite": "bookworm",
+            "components": "main",
+            "gpg_key_filename": "edge-archive-keyring.gpg"
+        },
+        {
+            "name": "edge-testing",
+            "url": "http://edge.vitcompany.com/repo/bookworm/testing",
+            "suite": "bookworm",
+            "components": "main",
+            "gpg_key_filename": "edge-archive-keyring.gpg"
+        }
+    ]
+
+    preseed_content = """# Debian Installer Preseed Configuration for Edge Debian 12
 d-i apt-setup/no_mirror boolean true
 d-i apt-setup/cdrom/set-next boolean false
 d-i apt-setup/cdrom/set-failed boolean false
@@ -126,7 +148,16 @@ d-i netcfg/get_hostname string edge-node
 d-i netcfg/get_domain string local
 """
 
-        firstboot_content = """#!/bin/sh
+    postinst_content = """update-locale LANG=C.UTF-8
+rm -f /etc/machine-id
+
+cat << 'EOF' > /etc/apt/sources.list.d/edge.list
+deb http://edge.vitcompany.com/repo/bookworm/stable bookworm main
+#deb http://edge.vitcompany.com/repo/bookworm/testing bookworm main
+EOF
+"""
+
+    firstboot_content = """#!/bin/sh
 log() {
   echo "$(date --rfc-3339=seconds) [firstboot] $1" >> /var/log/edge/firstboot.log
 }
@@ -136,9 +167,11 @@ systemd-machine-id-setup
 log "DONE"
 """
 
+    existing = db.query(models.Recipe).filter(models.Recipe.name == "Debian 12 Bookworm (Edge Base)").first()
+    if not existing:
         recipe = models.Recipe(
             name="Debian 12 Bookworm (Edge Base)",
-            description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, systemd firstboot, and core utilities.",
+            description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, edge.vitcompany.com APT repositories, systemd firstboot, and core utilities.",
             distribution="debian",
             release="bookworm",
             architecture="amd64",
@@ -148,26 +181,27 @@ log "DONE"
                 "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
                 "linux-image-amd64", "net-tools", "sudo", "ca-certificates"
             ],
-            repositories=[
-                {
-                    "name": "debian-main",
-                    "url": "http://deb.debian.org/debian",
-                    "suite": "bookworm",
-                    "components": "main contrib non-free non-free-firmware",
-                    "gpg_key_filename": "debian-archive-bookworm.gpg"
-                }
-            ],
+            repositories=repos_spec,
             hostname="edge-node",
             ssh_keys=[],
             kernel_params="ipv6.disable=1 nohz=off",
             raw_mkosi_conf="",
             raw_preseed_cfg=preseed_content,
-            raw_postinst="update-locale LANG=C.UTF-8\nrm -f /etc/machine-id\n",
+            raw_postinst=postinst_content,
             raw_firstboot=firstboot_content
         )
         db.add(recipe)
         db.commit()
         print("Default Debian 12 Bookworm base recipe seeded successfully.")
+    else:
+        # Update repositories & scripts on existing template if missing vitcompany repos
+        existing.repositories = repos_spec
+        existing.raw_postinst = postinst_content
+        existing.raw_preseed_cfg = preseed_content
+        existing.raw_firstboot = firstboot_content
+        existing.kernel_params = "ipv6.disable=1 nohz=off"
+        db.commit()
+        print("Updated existing Debian 12 Bookworm base recipe with edge.vitcompany.com repositories.")
 
 
 def upgrade_settings(db: Session):

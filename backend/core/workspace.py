@@ -22,6 +22,15 @@ def prepare_workspace(recipe_id: int) -> str:
         "mkosi.extra/opt/custom"
     ]
 
+    # Clean stale hook scripts from previous runs
+    for old_hook in ["mkosi.postinst", "mkosi.postinst.chroot", "mkosi.finalize", "mkosi.finalize.chroot", "mkosi.prepare", "mkosi.prepare.chroot"]:
+        old_h_path = os.path.join(recipe_ws, old_hook)
+        if os.path.exists(old_h_path):
+            try:
+                os.remove(old_h_path)
+            except Exception:
+                pass
+
     for d in subdirs:
         os.makedirs(os.path.join(recipe_ws, d), exist_ok=True)
 
@@ -184,10 +193,11 @@ else
   {postinst_body}
 fi
 """
-    postinst_path = os.path.join(workspace_path, "mkosi.postinst")
-    with open(postinst_path, "w") as f:
-        f.write(postinst_script)
-    os.chmod(postinst_path, 0o755)
+    for hk in ["mkosi.postinst", "mkosi.finalize"]:
+        postinst_path = os.path.join(workspace_path, hk)
+        with open(postinst_path, "w") as f:
+            f.write(postinst_script)
+        os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service
     firstboot_lines = ["#!/bin/bash", "set -e"]

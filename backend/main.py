@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from database import get_db, setup_db_logging, engine
 import models
@@ -35,8 +36,6 @@ app.include_router(assets_router.router)
 app.include_router(repositories_router.router)
 
 
-
-
 @app.on_event("startup")
 def startup_db_init():
     try:
@@ -52,6 +51,7 @@ def startup_db_init():
 
     try:
         db = next(get_db())
+        run_migrations_safety(db)
         upgrade_settings(db)
         seed_superadmin(db)
         seed_default_debian12_recipe(db)
@@ -59,6 +59,18 @@ def startup_db_init():
         db.close()
     except Exception as e:
         print(f"Error during database startup initialization: {e}")
+
+
+def run_migrations_safety(db: Session):
+    """
+    Ensure newly added columns exist in PostgreSQL database directly.
+    """
+    try:
+        db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS kernel_params VARCHAR;"))
+        db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS raw_firstboot TEXT;"))
+        db.commit()
+    except Exception as e:
+        print(f"Safety migration warning: {e}")
 
 
 def seed_superadmin(db: Session):
@@ -93,6 +105,37 @@ def seed_default_debian12_recipe(db: Session):
     """
     existing = db.query(models.Recipe).filter(models.Recipe.name == "Debian 12 Bookworm (Edge Base)").first()
     if not existing:
+        preseed_content = """# Debian Installer Preseed Configuration for Edge Debian 12
+d-i apt-setup/no_mirror boolean true
+d-i apt-setup/cdrom/set-next boolean false
+d-i apt-setup/cdrom/set-failed boolean false
+d-i console-setup/ask_detect boolean false
+d-i console-setup/layoutcode string us
+d-i partman-basicfilesystems/no_swap boolean false
+d-i debian-installer/language string en
+d-i debian-installer/country string UA
+d-i debian-installer/locale string C
+d-i debian-installer/keymap select us
+d-i keymap select us
+d-i console-keymaps-at/keymap select us
+d-i keyboard-configuration/xkb-keymap select us
+d-i netcfg/choose_interface select auto
+d-i netcfg/link_wait_timeout string 10
+d-i netcfg/dhcp_timeout string 90
+d-i netcfg/get_hostname string edge-node
+d-i netcfg/get_domain string local
+"""
+
+        firstboot_content = """#!/bin/sh
+log() {
+  echo "$(date --rfc-3339=seconds) [firstboot] $1" >> /var/log/edge/firstboot.log
+}
+
+log "EXEC"
+systemd-machine-id-setup
+log "DONE"
+"""
+
         recipe = models.Recipe(
             name="Debian 12 Bookworm (Edge Base)",
             description="Default Edge base OS image recipe for Debian 12 Bookworm (x86_64) with intel graphics, systemd firstboot, and core utilities.",
@@ -118,8 +161,9 @@ def seed_default_debian12_recipe(db: Session):
             ssh_keys=[],
             kernel_params="ipv6.disable=1 nohz=off",
             raw_mkosi_conf="",
+            raw_preseed_cfg=preseed_content,
             raw_postinst="update-locale LANG=C.UTF-8\nrm -f /etc/machine-id\n",
-            raw_firstboot="#!/bin/sh\nlog() {\n  echo \"$(date --rfc-3339=seconds) [firstboot] $1\" >> /var/log/edge/firstboot.log\n}\nlog \"EXEC\"\nsystemd-machine-id-setup\nlog \"DONE\"\n"
+            raw_firstboot=firstboot_content
         )
         db.add(recipe)
         db.commit()

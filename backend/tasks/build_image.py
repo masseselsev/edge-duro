@@ -61,6 +61,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
         )
 
         last_progress_pct = -1
+        last_cancel_check = 0.0
         if process.stdout:
             for line in iter(process.stdout.readline, ""):
                 clean_line = line.rstrip("\r\n").strip()
@@ -79,13 +80,19 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
                 log_to_task(build_id, clean_line)
 
-                # Check if build was cancelled via API
-                db.refresh(build)
-                if build.status == "CANCELLED":
-                    log_to_task(build_id, "[SYSTEM] Process termination requested by user. Terminating mkosi...")
-                    process.terminate()
-                    process.wait(timeout=5)
-                    return
+                # Check if build was cancelled via API (throttled to once every 3s)
+                now = time.time()
+                if now - last_cancel_check > 3.0:
+                    last_cancel_check = now
+                    try:
+                        db.refresh(build)
+                        if build.status == "CANCELLED":
+                            log_to_task(build_id, "[SYSTEM] Process termination requested by user. Terminating mkosi...")
+                            process.terminate()
+                            process.wait(timeout=5)
+                            return
+                    except Exception:
+                        pass
 
             process.stdout.close()
 

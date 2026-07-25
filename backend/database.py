@@ -9,7 +9,13 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:securepassword@localhost:5433/duro_image_builder"
 )
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=20,
+    max_overflow=30,
+    pool_pre_ping=True,
+    pool_recycle=300
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -38,6 +44,7 @@ class DBLoggingHandler(logging.Handler):
             name.startswith("sqlalchemy") or
             name.startswith("urllib3") or
             name.startswith("redis") or
+            name.startswith("uvicorn.access") or
             "insert into system_logs" in record.getMessage().lower()
         ):
             return

@@ -94,14 +94,12 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-5 animate-tab-in">
-      <div className="flex items-center gap-2.5 border-b border-zinc-800 pb-4">
-        <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-          <Gear size={20} />
-        </div>
+    <div className="space-y-6 animate-tab-in">
+      {/* Header matching edge-bro & edge-zero */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('tabSettings')}</h2>
-          <p className="text-[11px] text-zinc-400 font-medium">Global Edge D.U.R.O. factory configuration</p>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-50">{t('tabSettings')}</h2>
+          <p className="text-sm text-zinc-400">Global Edge D.U.R.O. factory configuration</p>
         </div>
       </div>
 

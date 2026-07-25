@@ -44,28 +44,24 @@ export default function BuildsTab() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-5 animate-tab-in">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-            <History size={20} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('buildHistoryTitle')}</h2>
-            <p className="text-[11px] text-zinc-400 font-medium">View image compilation task runs, logs, and artifacts</p>
-          </div>
+    <div className="space-y-6 animate-tab-in">
+      {/* Header matching edge-bro & edge-zero */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-50">{t('buildHistoryTitle')}</h2>
+          <p className="text-sm text-zinc-400">View image compilation task runs, logs, and artifacts</p>
         </div>
 
         <button
           onClick={fetchBuilds}
-          className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
+          className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
           title="Refresh"
         >
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
         {loading && builds.length === 0 ? (
           <div className="flex items-center justify-center p-12 text-zinc-400">
             <Loader2 className="animate-spin mr-2" size={20} />
@@ -80,19 +76,19 @@ export default function BuildsTab() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/50 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-3 px-4">{t('buildId')}</th>
-                  <th className="py-3 px-4">{t('status')}</th>
-                  <th className="py-3 px-4">{t('startedAt')}</th>
-                  <th className="py-3 px-4">{t('duration')}</th>
-                  <th className="py-3 px-4">{t('triggeredBy')}</th>
-                  <th className="py-3 px-4 text-right">{t('actions')}</th>
+                  <th className="px-6 py-3.5">{t('buildId')}</th>
+                  <th className="px-6 py-3.5">{t('status')}</th>
+                  <th className="px-6 py-3.5">{t('startedAt')}</th>
+                  <th className="px-6 py-3.5">{t('duration')}</th>
+                  <th className="px-6 py-3.5">{t('triggeredBy')}</th>
+                  <th className="px-6 py-3.5 text-right">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-xs">
                 {builds.map((build) => (
                   <tr key={build.id} className="hover:bg-zinc-800/30 transition-colors">
-                    <td className="py-3 px-4 font-mono text-zinc-300 font-bold">{build.id.slice(0, 8)}...</td>
-                    <td className="py-3 px-4">
+                    <td className="px-6 py-3.5 font-mono text-zinc-300 font-bold">{build.id.slice(0, 8)}...</td>
+                    <td className="px-6 py-3.5">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                         build.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                         build.status === 'RUNNING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse' :
@@ -103,10 +99,10 @@ export default function BuildsTab() {
                         {build.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-zinc-400 font-mono">{new Date(build.created_at).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-zinc-400 font-mono">{build.duration_seconds ? `${build.duration_seconds}s` : '—'}</td>
-                    <td className="py-3 px-4 text-zinc-300">{build.triggered_by || 'system'}</td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="px-6 py-3.5 text-zinc-400 font-mono">{new Date(build.created_at).toLocaleString()}</td>
+                    <td className="px-6 py-3.5 text-zinc-400 font-mono">{build.duration_seconds ? `${build.duration_seconds}s` : '—'}</td>
+                    <td className="px-6 py-3.5 text-zinc-300">{build.triggered_by || 'system'}</td>
+                    <td className="px-6 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {build.recipe && (
                           <button

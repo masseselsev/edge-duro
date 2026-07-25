@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText } from 'lucide-react';
+import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeViewerModal from './RecipeViewerModal';
 
@@ -41,14 +41,8 @@ export default function StorageTab() {
         fetch('/api/storage/summary'),
         fetch('/api/storage/artifacts')
       ]);
-      if (sumRes.ok) {
-        const sumData = await sumRes.json();
-        setSummary(sumData);
-      }
-      if (artRes.ok) {
-        const artData = await artRes.json();
-        setArtifacts(artData);
-      }
+      if (sumRes.ok) setSummary(await sumRes.json());
+      if (artRes.ok) setArtifacts(await artRes.json());
     } catch (err) {
       console.error('Failed to fetch storage data:', err);
     } finally {
@@ -69,11 +63,9 @@ export default function StorageTab() {
   };
 
   const toggleSelectFile = (filename: string) => {
-    if (selectedFiles.includes(filename)) {
-      setSelectedFiles(selectedFiles.filter((f) => f !== filename));
-    } else {
-      setSelectedFiles([...selectedFiles, filename]);
-    }
+    setSelectedFiles((prev) =>
+      prev.includes(filename) ? prev.filter((f) => f !== filename) : [...prev, filename]
+    );
   };
 
   const handleDeleteSingle = async (filename: string) => {
@@ -92,7 +84,6 @@ export default function StorageTab() {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedFiles.length === 0) return;
     try {
       const res = await fetch('/api/storage/artifacts/bulk-delete', {
         method: 'POST',
@@ -114,33 +105,28 @@ export default function StorageTab() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-5 animate-tab-in">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-800 pb-4 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-            <HardDrive size={22} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-zinc-50 tracking-tight">{t('storageTitle')}</h2>
-            <p className="text-[11px] text-zinc-400 font-medium">{t('storageSubtitle')}</p>
-          </div>
+    <div className="space-y-6">
+      {/* Header matching edge-bro & edge-zero */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-50">{t('storageTitle')}</h2>
+          <p className="text-sm text-zinc-400">{t('storageSubtitle')}</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
           {selectedFiles.length > 0 && (
             <button
               onClick={() => setIsBulkDeleting(true)}
-              className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-semibold transition-all cursor-pointer"
             >
-              <Trash2 size={14} />
+              <Trash2 size={15} />
               <span>{t('deleteSelected', { count: selectedFiles.length })}</span>
             </button>
           )}
 
           <button
             onClick={fetchStorageData}
-            className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
+            className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
             title="Refresh Storage"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
@@ -148,48 +134,48 @@ export default function StorageTab() {
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
+      {/* Summary KPI Cards matching edge-zero design */}
       {summary && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between shadow-xl">
             <div>
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 {t('totalArtifacts')}
               </span>
-              <span className="text-2xl font-black font-mono text-amber-400">{summary.total_files}</span>
+              <span className="text-xl font-bold font-mono text-amber-400">{summary.total_files}</span>
             </div>
-            <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-400">
-              <Folder size={20} />
+            <div className="p-2.5 bg-zinc-950/80 border border-zinc-800/80 rounded-xl text-zinc-400">
+              <Folder size={18} />
             </div>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between shadow-xl">
             <div>
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 {t('totalStorageUsed')}
               </span>
-              <span className="text-2xl font-black font-mono text-zinc-100">{summary.total_human}</span>
+              <span className="text-xl font-bold font-mono text-zinc-100">{summary.total_human}</span>
             </div>
-            <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-amber-400">
-              <HardDrive size={20} />
+            <div className="p-2.5 bg-zinc-950/80 border border-zinc-800/80 rounded-xl text-amber-400">
+              <HardDrive size={18} />
             </div>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between shadow-xl">
             <div>
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 {t('freeStorageAvailable')}
               </span>
-              <span className="text-2xl font-black font-mono text-emerald-400">{summary.free_human}</span>
+              <span className="text-xl font-bold font-mono text-emerald-400">{summary.free_human}</span>
             </div>
-            <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-emerald-400">
-              <HardDrive size={20} />
+            <div className="p-2.5 bg-zinc-950/80 border border-zinc-800/80 rounded-xl text-emerald-400">
+              <HardDrive size={18} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Search Bar & Location Directory Hint */}
+      {/* Search Bar with Search Icon & Path Hint matching edge-zero */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/50 p-3 px-4 border border-zinc-800/80 rounded-2xl">
         <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 w-full sm:w-auto overflow-x-auto">
           <span className="text-zinc-500 font-bold uppercase text-[10px] tracking-wider">{t('pathLabel')}</span>
@@ -198,17 +184,20 @@ export default function StorageTab() {
           </code>
         </div>
 
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('filterByFilename')}
-          className="w-full sm:w-64 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
-        />
+        <div className="relative w-full sm:w-80">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('filterByFilename')}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+          />
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+      {/* Table matching edge-bro & edge-zero margins & padding */}
+      <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
         {loading && artifacts.length === 0 ? (
           <div className="flex items-center justify-center p-12 text-zinc-400">
             <Loader2 className="animate-spin mr-2" size={20} />
@@ -223,7 +212,7 @@ export default function StorageTab() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/50 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-3 px-4 w-10 text-center">
+                  <th className="px-6 py-3.5 w-10 text-center">
                     <button
                       type="button"
                       onClick={toggleSelectAll}
@@ -236,11 +225,11 @@ export default function StorageTab() {
                       )}
                     </button>
                   </th>
-                  <th className="py-3 px-4">{t('filenameHeader')}</th>
-                  <th className="py-3 px-4">{t('formatHeader')}</th>
-                  <th className="py-3 px-4">{t('fileSizeHeader')}</th>
-                  <th className="py-3 px-4">{t('lastModifiedHeader')}</th>
-                  <th className="py-3 px-4 text-right">{t('actions')}</th>
+                  <th className="px-6 py-3.5">{t('filenameHeader')}</th>
+                  <th className="px-6 py-3.5">{t('formatHeader')}</th>
+                  <th className="px-6 py-3.5">{t('fileSizeHeader')}</th>
+                  <th className="px-6 py-3.5">{t('lastModifiedHeader')}</th>
+                  <th className="px-6 py-3.5 text-right">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-xs">
@@ -253,7 +242,7 @@ export default function StorageTab() {
                         isSelected ? 'bg-amber-500/5' : ''
                       }`}
                     >
-                      <td className="py-3 px-4 text-center">
+                      <td className="px-6 py-3.5 text-center">
                         <button
                           type="button"
                           onClick={() => toggleSelectFile(art.filename)}
@@ -267,7 +256,7 @@ export default function StorageTab() {
                         </button>
                       </td>
 
-                      <td className="py-3 px-4 font-mono font-bold text-zinc-200">
+                      <td className="px-6 py-3.5 font-mono font-bold text-zinc-200">
                         <div className="flex items-center gap-2.5">
                           {art.format === 'iso' ? (
                             <Disc size={16} className="text-amber-400 flex-shrink-0" />
@@ -280,7 +269,7 @@ export default function StorageTab() {
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="px-6 py-3.5">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                             art.format === 'iso'
@@ -294,9 +283,9 @@ export default function StorageTab() {
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 font-mono text-zinc-300 font-semibold">{art.size_human}</td>
+                      <td className="px-6 py-3.5 font-mono text-zinc-300 font-semibold">{art.size_human}</td>
 
-                      <td className="py-3 px-4 font-mono text-zinc-400">
+                      <td className="px-6 py-3.5 font-mono text-zinc-400">
                         {new Date(art.modified_at).toLocaleString()}
                       </td>
 

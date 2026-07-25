@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle } from 'lucide-react';
+import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import RecipeViewerModal from './RecipeViewerModal';
 
 interface Artifact {
   filename: string;
@@ -9,6 +10,8 @@ interface Artifact {
   size_human: string;
   format: string;
   modified_at: string;
+  recipe?: any;
+  build_id?: string;
 }
 
 interface Summary {
@@ -29,6 +32,7 @@ export default function StorageTab() {
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
   const fetchStorageData = async () => {
     setLoading(true);
@@ -298,6 +302,17 @@ export default function StorageTab() {
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {art.recipe && (
+                            <button
+                              onClick={() => setSelectedRecipe(art.recipe)}
+                              className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                              title={t('viewRecipe')}
+                            >
+                              <FileText size={13} />
+                              <span>{t('viewRecipe')}</span>
+                            </button>
+                          )}
+
                           <a
                             href={`/api/storage/artifacts/${encodeURIComponent(art.filename)}/download`}
                             className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
@@ -389,6 +404,10 @@ export default function StorageTab() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedRecipe && (
+        <RecipeViewerModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
       )}
     </div>
   );

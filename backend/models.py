@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, BigInteger, ForeignKey, JSON, Boolean
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from database import Base
 
 class Settings(Base):
@@ -89,6 +90,8 @@ class Build(Base):
     iso_artifact_size = Column(BigInteger, nullable=True)
     output_format = Column(String, nullable=True) # raw_xz, iso
     duration_seconds = Column(Integer, nullable=True)
+
+    recipe = relationship("Recipe", lazy="joined")
 
 
 class RecipeAsset(Base):

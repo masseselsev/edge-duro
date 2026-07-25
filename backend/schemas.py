@@ -150,6 +150,7 @@ class BuildResponse(UTCModel):
     iso_artifact_size: Optional[int] = None
     output_format: Optional[str] = None
     duration_seconds: Optional[int] = None
+    recipe: Optional[RecipeResponse] = None
 
 
 class PaginatedBuildsResponse(BaseModel):

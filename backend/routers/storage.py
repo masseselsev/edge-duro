@@ -21,6 +21,9 @@ def get_outputs_dir() -> str:
     return outputs_dir
 
 
+import schemas
+from typing import Optional
+
 class ArtifactInfo(BaseModel):
     filename: str
     filepath: str
@@ -28,6 +31,8 @@ class ArtifactInfo(BaseModel):
     size_human: str
     format: str  # raw_xz, iso, raw, other
     modified_at: str
+    recipe: Optional[schemas.RecipeResponse] = None
+    build_id: Optional[str] = None
 
 
 class StorageSummaryResponse(BaseModel):
@@ -76,9 +81,18 @@ def get_storage_summary():
 
 
 @router.get("/artifacts", response_model=List[ArtifactInfo])
-def list_artifacts():
+def list_artifacts(db: Session = Depends(get_db)):
     outputs_dir = get_outputs_dir()
     items = []
+
+    # Map build artifact paths & log filenames to builds for fast recipe lookup
+    builds = db.query(models.Build).all()
+    build_map = {}
+    for b in builds:
+        if b.artifact_path:
+            build_map[os.path.basename(b.artifact_path)] = b
+        if b.iso_artifact_path:
+            build_map[os.path.basename(b.iso_artifact_path)] = b
 
     if os.path.exists(outputs_dir):
         for entry in os.scandir(outputs_dir):
@@ -94,13 +108,23 @@ def list_artifacts():
                 else:
                     fmt = "other"
 
+                matched_build = build_map.get(fn)
+                recipe_schema = None
+                b_id = None
+                if matched_build:
+                    b_id = matched_build.id
+                    if matched_build.recipe:
+                        recipe_schema = schemas.RecipeResponse.model_validate(matched_build.recipe)
+
                 items.append(ArtifactInfo(
                     filename=fn,
                     filepath=entry.path,
                     size_bytes=stat.st_size,
                     size_human=format_bytes(stat.st_size),
                     format=fmt,
-                    modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+                    modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                    recipe=recipe_schema,
+                    build_id=b_id
                 ))
 
     items.sort(key=lambda x: x.modified_at, reverse=True)

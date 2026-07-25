@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { History, Terminal, Download, XCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BuildLogStream from './BuildLogStream';
+import RecipeViewerModal from './RecipeViewerModal';
 
 export default function BuildsTab() {
   const { t } = useTranslation();
   const [builds, setBuilds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLogBuild, setActiveLogBuild] = useState<any | null>(null);
+  const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
   const fetchBuilds = async () => {
     setLoading(true);
@@ -106,6 +108,16 @@ export default function BuildsTab() {
                     <td className="py-3 px-4 text-zinc-300">{build.triggered_by || 'system'}</td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {build.recipe && (
+                          <button
+                            onClick={() => setSelectedRecipe(build.recipe)}
+                            className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            title={t('viewRecipe')}
+                          >
+                            <FileText size={13} />
+                            <span>{t('viewRecipe')}</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => setActiveLogBuild(build)}
                           className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
@@ -158,6 +170,10 @@ export default function BuildsTab() {
           recipeName={`Recipe #${activeLogBuild.recipe_id}`}
           onClose={() => setActiveLogBuild(null)}
         />
+      )}
+
+      {selectedRecipe && (
+        <RecipeViewerModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
       )}
     </div>
   );

@@ -135,7 +135,7 @@ def seed_default_debian12_recipe(db: Session):
 
     edge_base_pkgs = [
         "systemd", "systemd-sysv", "systemd-boot", "dbus", "iproute2", "curl", "wget",
-        "openssh-server", "firmware-misc-nonfree", "intel-media-va-driver-non-free",
+        "openssh-server", "firmware-misc-nonfree", "intel-microcode", "firmware-sof-signed", "intel-media-va-driver-non-free",
         "linux-image-amd64", "net-tools", "sudo", "ca-certificates", "locales",
         "nginx-full", "gstreamer1.0-libav", "gstreamer1.0-plugins-good", "gstreamer1.0-plugins-bad",
         "gstreamer1.0-plugins-ugly", "gstreamer1.0-vaapi", "libturbojpeg0", "zip", "unzip",

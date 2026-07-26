@@ -27,17 +27,16 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     if "debian" in distro:
         mkosi_distro = "debian"
         components = "main contrib non-free non-free-firmware"
-        debian_pkg_map = {
+        pkg_map = {
             "linux-image-generic": "linux-image-amd64",
-            "linux-firmware": "firmware-misc-nonfree",
+            "linux-firmware": "firmware-misc-nonfree intel-microcode firmware-sof-signed",
             "acpi-support": "acpi-support-base",
             "intel-media-driver": "intel-media-va-driver-non-free",
         }
-        std_pkgs = [debian_pkg_map.get(p.lower(), p) for p in std_pkgs]
     elif "ubuntu" in distro:
         mkosi_distro = "ubuntu"
         components = "main restricted universe multiverse"
-        ubuntu_pkg_map = {
+        pkg_map = {
             "linux-image-amd64": "linux-image-generic",
             "firmware-misc-nonfree": "intel-microcode firmware-sof-signed",
             "acpi-support-base": "",
@@ -46,15 +45,17 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "systemd-sysv": "",
             "coreutils": "",
         }
-        mapped_pkgs = []
-        for p in std_pkgs:
-            mapped_val = ubuntu_pkg_map.get(p.lower(), p)
-            if mapped_val:
-                mapped_pkgs.extend(mapped_val.split())
-        std_pkgs = mapped_pkgs
     else:
         mkosi_distro = recipe.distribution
         components = "main"
+        pkg_map = {}
+
+    mapped_pkgs = []
+    for p in std_pkgs:
+        mapped_val = pkg_map.get(p.lower(), p)
+        if mapped_val:
+            mapped_pkgs.extend(mapped_val.split())
+    std_pkgs = mapped_pkgs
 
     packages_formatted = "\n    ".join(std_pkgs)
 

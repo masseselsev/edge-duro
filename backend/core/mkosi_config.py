@@ -23,10 +23,26 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     }
     mkosi_arch = arch_map.get((recipe.architecture or "amd64").lower(), "x86-64")
 
-    if (recipe.distribution or "").lower() == "debian":
+    distro = (recipe.distribution or "debian").lower()
+    if distro == "debian":
         components = "main contrib non-free non-free-firmware"
-    elif (recipe.distribution or "").lower() == "ubuntu":
+        debian_pkg_map = {
+            "linux-image-generic": "linux-image-amd64",
+            "linux-firmware": "firmware-misc-nonfree",
+            "acpi-support": "acpi-support-base",
+            "intel-media-driver": "intel-media-va-driver-non-free",
+        }
+        std_pkgs = [debian_pkg_map.get(p.lower(), p) for p in std_pkgs]
+    elif distro == "ubuntu":
         components = "main restricted universe multiverse"
+        ubuntu_pkg_map = {
+            "linux-image-amd64": "linux-image-generic",
+            "firmware-misc-nonfree": "linux-firmware",
+            "acpi-support-base": "",
+            "acpi-support": "",
+            "intel-media-va-driver-non-free": "intel-media-driver",
+        }
+        std_pkgs = [ubuntu_pkg_map.get(p.lower(), p) for p in std_pkgs if ubuntu_pkg_map.get(p.lower(), p) != ""]
     else:
         components = "main"
 

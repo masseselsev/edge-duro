@@ -39,14 +39,19 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         components = "main restricted universe multiverse"
         ubuntu_pkg_map = {
             "linux-image-amd64": "linux-image-generic",
-            "firmware-misc-nonfree": "linux-firmware",
+            "firmware-misc-nonfree": "intel-microcode firmware-sof-signed",
             "acpi-support-base": "",
             "acpi-support": "",
             "intel-media-va-driver-non-free": "intel-media-va-driver",
             "systemd-sysv": "",
             "coreutils": "",
         }
-        std_pkgs = [ubuntu_pkg_map.get(p.lower(), p) for p in std_pkgs if ubuntu_pkg_map.get(p.lower(), p) != ""]
+        mapped_pkgs = []
+        for p in std_pkgs:
+            mapped_val = ubuntu_pkg_map.get(p.lower(), p)
+            if mapped_val:
+                mapped_pkgs.extend(mapped_val.split())
+        std_pkgs = mapped_pkgs
     else:
         mkosi_distro = recipe.distribution
         components = "main"

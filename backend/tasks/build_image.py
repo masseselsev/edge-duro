@@ -188,11 +188,12 @@ def build_image_task(self, build_id: str, recipe_id: int):
         arch = (recipe.architecture if recipe and recipe.architecture else "amd64").lower()
         rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
 
+        short_id = build_id[:8] if build_id else ""
         if edge_base_ver:
-            raw_xz_filename = f"edge_{edge_base_ver}_{arch}-{rel}-auto.raw.xz"
+            raw_xz_filename = f"edge_{edge_base_ver}_{arch}-{rel}_{short_id}.raw.xz"
         else:
             timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            raw_xz_filename = f"edge_{arch}-{rel}-auto_{timestamp_str}.raw.xz"
+            raw_xz_filename = f"edge_{arch}-{rel}_{short_id}_{timestamp_str}.raw.xz"
 
         final_raw_xz_path = os.path.join(outputs_dir, raw_xz_filename)
 

@@ -116,7 +116,8 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         arch = (recipe.architecture if recipe and recipe.architecture else "amd64").lower()
         rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
 
-        iso_filename = f"edge_{edge_base_ver}_{arch}-{rel}-auto.iso"
+        short_id = build_id[:8] if build_id else ""
+        iso_filename = f"edge_{edge_base_ver}_{arch}-{rel}_{short_id}.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
         log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")
@@ -164,6 +165,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                     "xorriso", "-as", "mkisofs",
                     "-r", "-J",
                     "-V", "DURO_BOOT",
+                    "-partition_offset", "16",
                     "-eltorito-alt-boot",
                     "-e", "efi.img",
                     "-no-emul-boot",

@@ -156,8 +156,17 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] ESP partition extraction failed: {e}")
 
-            # Copy raw disk image into ISO staging directory
-            shutil.copy2(target_raw, os.path.join(iso_staging, os.path.basename(target_raw)))
+            # Copy compressed raw.xz artifact into ISO staging directory (saves 2.5GB in ISO)
+            if build and build.artifact_path and os.path.exists(build.artifact_path):
+                shutil.copy2(build.artifact_path, os.path.join(iso_staging, os.path.basename(build.artifact_path)))
+            elif target_raw:
+                # Fallback: Compress target_raw on the fly if xz artifact is unavailable
+                raw_xz_staged = os.path.join(iso_staging, f"{os.path.splitext(os.path.basename(target_raw))[0]}.raw.xz")
+                try:
+                    with open(raw_xz_staged, "wb") as out_f:
+                        subprocess.run(["xz", "-c", "-3", "-T0", target_raw], stdout=out_f, check=True)
+                except Exception:
+                    shutil.copy2(target_raw, os.path.join(iso_staging, os.path.basename(target_raw)))
 
             xorriso_bin = shutil.which("xorriso")
             if xorriso_bin and esp_extracted:

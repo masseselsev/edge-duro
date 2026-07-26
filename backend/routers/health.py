@@ -2,6 +2,7 @@ import os
 import time
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -233,9 +234,22 @@ def get_system_metrics():
 def get_system_logs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=25, ge=1, le=100),
+    days: Optional[int] = Query(default=None, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.SystemLog)
+    if days is None:
+        sett = db.query(models.Settings).first()
+        days = sett.log_retention_days if sett and hasattr(sett, "log_retention_days") else 3
+
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+    try:
+        db.query(models.SystemLog).filter(models.SystemLog.created_at < cutoff_date).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    query = db.query(models.SystemLog).filter(models.SystemLog.created_at >= cutoff_date)
     total = query.count()
     items = query.order_by(models.SystemLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
     pages = (total + limit - 1) // limit if total > 0 else 1
@@ -252,9 +266,22 @@ def get_system_logs(
 def get_audit_logs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=25, ge=1, le=100),
+    days: Optional[int] = Query(default=None, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.AuditLog)
+    if days is None:
+        sett = db.query(models.Settings).first()
+        days = sett.log_retention_days if sett and hasattr(sett, "log_retention_days") else 3
+
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+    try:
+        db.query(models.AuditLog).filter(models.AuditLog.created_at < cutoff_date).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    query = db.query(models.AuditLog).filter(models.AuditLog.created_at >= cutoff_date)
     total = query.count()
     items = query.order_by(models.AuditLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
     pages = (total + limit - 1) // limit if total > 0 else 1

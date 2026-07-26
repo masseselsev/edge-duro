@@ -73,6 +73,7 @@ def run_migrations_safety(db: Session):
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS timezone VARCHAR DEFAULT 'UTC';"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS hostname_from_netif BOOLEAN DEFAULT FALSE;"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS partitions JSON DEFAULT '[]'::json;"))
+        db.execute(text("ALTER TABLE settings ADD COLUMN IF NOT EXISTS log_retention_days INTEGER DEFAULT 3;"))
         db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS iso_artifact_path VARCHAR;"))
         db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS iso_artifact_size BIGINT;"))
         db.commit()

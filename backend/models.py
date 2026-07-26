@@ -14,6 +14,7 @@ class Settings(Base):
     timezone = Column(String, default='Browser Local', nullable=False)
     language = Column(String, default='en', nullable=False)
     duro_workspace_path = Column(String, default='/opt/data/duro_workspace', nullable=False)
+    log_retention_days = Column(Integer, default=3, nullable=False)
 
 
 class User(Base):

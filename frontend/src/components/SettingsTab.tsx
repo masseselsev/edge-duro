@@ -40,6 +40,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
   const [serverName, setServerName] = useState('Edge-D.U.R.O.');
   const [timezone, setTimezone] = useState('Browser Local');
+  const [logRetentionDays, setLogRetentionDays] = useState(3);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
         if (data) {
           setServerName(data.server_name || 'Edge-D.U.R.O.');
           setTimezone(data.timezone || 'Browser Local');
+          setLogRetentionDays(data.log_retention_days ?? 3);
         }
       })
       .catch((err) => console.error(err))
@@ -67,6 +69,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
         body: JSON.stringify({
           server_name: serverName,
           timezone,
+          log_retention_days: Number(logRetentionDays),
         }),
       });
 
@@ -110,7 +113,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pl-1">{t('serverName')}</label>
             <input
@@ -129,6 +132,21 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
               value={timezone}
               onChange={setTimezone}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pl-1">{t('logRetentionDays') || 'Log Retention Depth'}</label>
+            <select
+              value={logRetentionDays}
+              onChange={(e) => setLogRetentionDays(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none cursor-pointer"
+            >
+              <option value={1}>1 Day (24 Hours)</option>
+              <option value={3}>3 Days (Default / 72 Hours)</option>
+              <option value={7}>7 Days (1 Week)</option>
+              <option value={14}>14 Days (2 Weeks)</option>
+              <option value={30}>30 Days (1 Month)</option>
+            </select>
           </div>
         </div>
 

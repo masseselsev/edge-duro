@@ -22,6 +22,7 @@ class SettingsBase(BaseModel):
     timezone: str = Field(default='Browser Local')
     language: str = Field(default='en')
     duro_workspace_path: str = Field(default='/opt/data/duro_workspace')
+    log_retention_days: int = Field(default=3, ge=1, le=365)
 
     @field_validator('server_name')
     @classmethod

@@ -162,9 +162,10 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             elif target_raw:
                 # Fallback: Compress target_raw on the fly if xz artifact is unavailable
                 raw_xz_staged = os.path.join(iso_staging, f"{os.path.splitext(os.path.basename(target_raw))[0]}.raw.xz")
+                cpu_threads = max(1, (os.cpu_count() or 2) // 2)
                 try:
                     with open(raw_xz_staged, "wb") as out_f:
-                        subprocess.run(["xz", "-c", "-3", "-T0", target_raw], stdout=out_f, check=True)
+                        subprocess.run(["nice", "-n", "19", "xz", "-c", "-3", f"-T{cpu_threads}", target_raw], stdout=out_f, check=True)
                 except Exception:
                     shutil.copy2(target_raw, os.path.join(iso_staging, os.path.basename(target_raw)))
 

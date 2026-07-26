@@ -200,10 +200,11 @@ def build_image_task(self, build_id: str, recipe_id: int):
         if target_raw_file:
             if not target_raw_file.endswith(".xz"):
                 uncompressed_raw_path = target_raw_file
-                log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({os.path.getsize(target_raw_file)} bytes) into {raw_xz_filename}...")
+                cpu_threads = max(1, (os.cpu_count() or 2) // 2)
+                log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({os.path.getsize(target_raw_file)} bytes) into {raw_xz_filename} using {cpu_threads} CPU threads (50% max quota)...")
                 try:
                     with open(final_raw_xz_path, "wb") as out_f:
-                        subprocess.run(["xz", "-c", "-3", "-T0", target_raw_file], stdout=out_f, check=True)
+                        subprocess.run(["nice", "-n", "19", "xz", "-c", "-3", f"-T{cpu_threads}", target_raw_file], stdout=out_f, check=True)
                 except Exception as e:
                     log_to_task(build_id, f"[WARNING] XZ compression failed ({e}), copying raw file...")
                     shutil.copy2(target_raw_file, final_raw_xz_path)

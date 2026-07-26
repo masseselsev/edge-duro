@@ -91,7 +91,7 @@ class PaginatedArtifactsResponse(BaseModel):
 @router.get("/artifacts", response_model=PaginatedArtifactsResponse)
 def list_artifacts(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=25, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=1000),
     db: Session = Depends(get_db)
 ):
     outputs_dir = get_outputs_dir()

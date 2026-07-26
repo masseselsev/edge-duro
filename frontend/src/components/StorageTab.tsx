@@ -49,6 +49,8 @@ export default function StorageTab() {
       if (artRes.ok) {
         const data = await artRes.json();
         setArtifacts(Array.isArray(data) ? data : (data.items || []));
+      } else {
+        console.error('Failed to fetch storage artifacts:', artRes.status, await artRes.text());
       }
     } catch (err) {
       console.error('Failed to fetch storage data:', err);

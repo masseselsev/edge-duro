@@ -42,7 +42,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "firmware-misc-nonfree": "linux-firmware",
             "acpi-support-base": "",
             "acpi-support": "",
-            "intel-media-va-driver-non-free": "intel-media-driver",
+            "intel-media-va-driver-non-free": "intel-media-va-driver",
             "systemd-sysv": "",
             "coreutils": "",
         }

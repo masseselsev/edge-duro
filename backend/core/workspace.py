@@ -96,12 +96,21 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
 
-    # 3.4. Persistent APT Package Cache configuration
+    # 3.4. Persistent APT Package Cache & Intel-only Pinning
+    pref_content = """Package: linux-firmware-nvidia-* linux-firmware-amd-* linux-firmware-qualcomm-* linux-firmware-mellanox-* linux-firmware-marvell-* linux-firmware-mediatek-* linux-firmware-broadcom-* linux-firmware-qlogic linux-firmware-netronome amd64-microcode
+Pin: release *
+Pin-Priority: -1
+"""
     for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
         apt_conf_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "apt.conf.d")
         os.makedirs(apt_conf_dir, exist_ok=True)
         with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
             f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
+
+        pref_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "preferences.d")
+        os.makedirs(pref_dir, exist_ok=True)
+        with open(os.path.join(pref_dir, "99-intel-only.pref"), "w") as f:
+            f.write(pref_content)
 
     # 3.5. Prepare script — runs on HOST before package installation (mkosi v14)
     # Uses $BUILDROOT to access the rootfs. Writes custom repos and runs apt-get update
@@ -113,6 +122,12 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         '',
         '# Determine rootfs path — mkosi v14 passes $BUILDROOT',
         'ROOT="${BUILDROOT:-/}"',
+        '',
+        '# Write APT preferences pinning into the rootfs',
+        'mkdir -p "$ROOT/etc/apt/preferences.d"',
+        "cat << 'PREFEOF' > \"$ROOT/etc/apt/preferences.d/99-intel-only.pref\"",
+        pref_content,
+        "PREFEOF",
         '',
         '# Write custom APT repos into the rootfs',
         'mkdir -p "$ROOT/etc/apt/sources.list.d"',

@@ -62,7 +62,7 @@ export default function LogsTab() {
           </div>
 
           <button
-            onClick={fetchLogs}
+            onClick={() => fetchLogs()}
             className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
             title="Refresh"
           >

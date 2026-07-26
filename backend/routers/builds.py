@@ -75,8 +75,29 @@ def list_builds(
     items = query.order_by(models.Build.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
     pages = (total + limit - 1) // limit if total > 0 else 1
 
+    build_responses = []
+    for b in items:
+        recipe_resp = schemas.RecipeResponse.model_validate(b.recipe) if b.recipe else None
+        build_responses.append(schemas.BuildResponse(
+            id=b.id,
+            recipe_id=b.recipe_id,
+            status=b.status,
+            triggered_by=b.triggered_by,
+            created_at=b.created_at,
+            updated_at=b.updated_at,
+            completed_at=b.completed_at,
+            log_output=None,
+            artifact_path=b.artifact_path,
+            artifact_size=b.artifact_size,
+            iso_artifact_path=b.iso_artifact_path,
+            iso_artifact_size=b.iso_artifact_size,
+            output_format=b.output_format,
+            duration_seconds=b.duration_seconds,
+            recipe=recipe_resp
+        ))
+
     return schemas.PaginatedBuildsResponse(
-        items=[schemas.BuildResponse.model_validate(b) for b in items],
+        items=build_responses,
         total=total,
         page=page,
         limit=limit,

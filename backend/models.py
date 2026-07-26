@@ -80,7 +80,7 @@ class Build(Base):
     recipe_id = Column(Integer, ForeignKey('recipes.id', ondelete='CASCADE'), nullable=False)
     status = Column(String, default='PENDING', nullable=False) # PENDING, RUNNING, SUCCESS, FAILED, CANCELLED
     triggered_by = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), index=True, nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     completed_at = Column(DateTime, nullable=True)
     log_output = Column(Text, default='', nullable=False)
@@ -120,7 +120,7 @@ class SystemLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     level = Column(String, nullable=False)
     message = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), index=True, nullable=False)
 
 
 class AuditLog(Base):
@@ -134,4 +134,4 @@ class AuditLog(Base):
     action = Column(String, nullable=False)
     details = Column(Text, nullable=True)
     ip_address = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), index=True, nullable=False)

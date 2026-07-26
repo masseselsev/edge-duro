@@ -3,6 +3,7 @@ import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText, Che
 import { useTranslation } from '../context/TranslationContext';
 import BuildLogStream from './BuildLogStream';
 import RecipeViewerModal from './RecipeViewerModal';
+import { getSavedLimit, saveLimit } from '../utils/storage';
 
 export default function BuildsTab() {
   const { t } = useTranslation();
@@ -14,7 +15,7 @@ export default function BuildsTab() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState<number>(() => getSavedLimit('builds', 25));
 
   const fetchBuilds = async (isInitial = false, pageNum = page, currentLimit = limit) => {
     if (isInitial) setLoading(true);
@@ -180,8 +181,10 @@ export default function BuildsTab() {
               <select
                 value={limit}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                  setLimit(Number(e.target.value));
+                  const val = Number(e.target.value);
+                  setLimit(val);
                   setPage(1);
+                  saveLimit('builds', val);
                 }}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
               >

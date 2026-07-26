@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeViewerModal from './RecipeViewerModal';
+import { getSavedLimit, saveLimit } from '../utils/storage';
 
 interface Artifact {
   filename: string;
@@ -35,7 +36,7 @@ export default function StorageTab() {
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState<number>(() => getSavedLimit('storage', 25));
 
   const fetchStorageData = async () => {
     setLoading(true);
@@ -350,8 +351,10 @@ export default function StorageTab() {
               <select
                 value={limit}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                  setLimit(Number(e.target.value));
+                  const val = Number(e.target.value);
+                  setLimit(val);
                   setPage(1);
+                  saveLimit('storage', val);
                 }}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
               >

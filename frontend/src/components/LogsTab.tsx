@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Shield, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import { getSavedLimit, saveLimit } from '../utils/storage';
 
 export default function LogsTab() {
   const { t } = useTranslation();
@@ -12,7 +13,7 @@ export default function LogsTab() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState<number>(() => getSavedLimit('logs_system', 25));
 
   const fetchLogs = async (pageNum = page, currentLimit = limit) => {
     setLoading(true);
@@ -42,8 +43,10 @@ export default function LogsTab() {
   };
 
   useEffect(() => {
+    const savedLimit = getSavedLimit(`logs_${subTab}`, 25);
+    setLimit(savedLimit);
     setPage(1);
-    fetchLogs(1, limit);
+    fetchLogs(1, savedLimit);
   }, [subTab]);
 
   useEffect(() => {
@@ -179,8 +182,10 @@ export default function LogsTab() {
               <select
                 value={limit}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                  setLimit(Number(e.target.value));
+                  const val = Number(e.target.value);
+                  setLimit(val);
                   setPage(1);
+                  saveLimit(`logs_${subTab}`, val);
                 }}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
               >

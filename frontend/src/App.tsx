@@ -112,6 +112,9 @@ function AppContent() {
       .then((user) => {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        if (user && user.username) {
+          localStorage.setItem('duro_username', user.username);
+        }
       })
       .catch(() => {
         setIsAuthenticated(false);

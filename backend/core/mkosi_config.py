@@ -41,6 +41,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "acpi-support-base": "",
             "acpi-support": "",
             "intel-media-va-driver-non-free": "intel-media-driver",
+            "systemd-sysv": "",
+            "coreutils": "",
         }
         std_pkgs = [ubuntu_pkg_map.get(p.lower(), p) for p in std_pkgs if ubuntu_pkg_map.get(p.lower(), p) != ""]
     else:

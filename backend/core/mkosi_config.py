@@ -98,7 +98,9 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "OutputDirectory=output",
         "",
         "[Content]",
+        "WithAPTRecommends=no",
         f"Packages=\n    {packages_formatted}",
+        "RemovePackages=\n    linux-firmware linux-firmware-nvidia-graphics linux-firmware-amd-graphics linux-firmware-qualcomm-misc linux-firmware-qualcomm-wireless linux-firmware-mellanox-spectrum linux-firmware-marvell-prestera linux-firmware-mediatek linux-firmware-broadcom-wireless amd64-microcode",
         "Autologin=yes",
         "SkeletonTrees=mkosi.skeleton",
     ]

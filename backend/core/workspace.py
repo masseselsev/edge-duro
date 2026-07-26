@@ -41,6 +41,16 @@ def prepare_workspace(recipe_id: int) -> str:
     with open(os.path.join(repart_dir, "20-root.conf"), "w") as f:
         f.write("[Partition]\nType=root\nFormat=ext4\nSizeMinBytes=4G\n")
 
+    pref_content = """Package: linux-firmware linux-firmware-nvidia-* linux-firmware-amd-* linux-firmware-qualcomm-* linux-firmware-mellanox-* linux-firmware-marvell-* linux-firmware-mediatek-* linux-firmware-broadcom-* linux-firmware-qlogic linux-firmware-netronome amd64-microcode
+Pin: release *
+Pin-Priority: -1
+"""
+    for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
+        pref_dir = os.path.join(recipe_ws, base_tree, "etc", "apt", "preferences.d")
+        os.makedirs(pref_dir, exist_ok=True)
+        with open(os.path.join(pref_dir, "99-intel-only.pref"), "w") as f:
+            f.write(pref_content)
+
     os.makedirs(os.path.join(base_dir, "cache", "apt"), exist_ok=True)
     return recipe_ws
 

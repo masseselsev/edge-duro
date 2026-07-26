@@ -48,18 +48,65 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         remove_files = [
             "/usr/lib/firmware/nvidia*",
             "/usr/lib/firmware/amdgpu*",
+            "/usr/lib/firmware/radeon*",
             "/usr/lib/firmware/qcom*",
             "/usr/lib/firmware/mellanox*",
             "/usr/lib/firmware/mrvl*",
             "/usr/lib/firmware/mediatek*",
+            "/usr/lib/firmware/broadcom*",
+            "/usr/lib/firmware/brcm*",
+            "/usr/lib/firmware/ath9k*",
+            "/usr/lib/firmware/ath10k*",
+            "/usr/lib/firmware/ath11k*",
+            "/usr/lib/firmware/ath12k*",
+            "/usr/lib/firmware/cxgb3*",
+            "/usr/lib/firmware/cxgb4*",
+            "/usr/lib/firmware/liquidio*",
+            "/usr/lib/firmware/netronome*",
             "/usr/share/doc",
             "/usr/share/man",
+            "/usr/share/info",
+            "/usr/share/help",
+            "/usr/share/gtk-doc",
+            "/usr/share/locale/*",
+            "/usr/share/sounds/*",
+            "/usr/share/icons/*",
+            "/var/cache/apt/*",
+            "/var/lib/apt/lists/*",
         ]
     else:
         mkosi_distro = recipe.distribution
         components = "main"
         pkg_map = {}
-        remove_files = []
+        remove_files = [
+            "/usr/lib/firmware/nvidia*",
+            "/usr/lib/firmware/amdgpu*",
+            "/usr/lib/firmware/radeon*",
+            "/usr/lib/firmware/qcom*",
+            "/usr/lib/firmware/mellanox*",
+            "/usr/lib/firmware/mrvl*",
+            "/usr/lib/firmware/mediatek*",
+            "/usr/lib/firmware/broadcom*",
+            "/usr/lib/firmware/brcm*",
+            "/usr/lib/firmware/ath9k*",
+            "/usr/lib/firmware/ath10k*",
+            "/usr/lib/firmware/ath11k*",
+            "/usr/lib/firmware/ath12k*",
+            "/usr/lib/firmware/cxgb3*",
+            "/usr/lib/firmware/cxgb4*",
+            "/usr/lib/firmware/liquidio*",
+            "/usr/lib/firmware/netronome*",
+            "/usr/share/doc",
+            "/usr/share/man",
+            "/usr/share/info",
+            "/usr/share/help",
+            "/usr/share/gtk-doc",
+            "/usr/share/locale/*",
+            "/usr/share/sounds/*",
+            "/usr/share/icons/*",
+            "/var/cache/apt/*",
+            "/var/lib/apt/lists/*",
+        ]
 
     mapped_pkgs = []
     for p in std_pkgs:

@@ -12,13 +12,13 @@ export default function LogsTab() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const limit = 15;
+  const [limit, setLimit] = useState(25);
 
-  const fetchLogs = async (pageNum = page) => {
+  const fetchLogs = async (pageNum = page, currentLimit = limit) => {
     setLoading(true);
     try {
       if (subTab === 'system') {
-        const res = await fetch(`/api/logs/system?page=${pageNum}&limit=${limit}`);
+        const res = await fetch(`/api/logs/system?page=${pageNum}&limit=${currentLimit}`);
         if (res.ok) {
           const data = await res.json();
           setSystemLogs(data.items || []);
@@ -26,7 +26,7 @@ export default function LogsTab() {
           setPages(data.pages || 1);
         }
       } else {
-        const res = await fetch(`/api/logs/audit?page=${pageNum}&limit=${limit}`);
+        const res = await fetch(`/api/logs/audit?page=${pageNum}&limit=${currentLimit}`);
         if (res.ok) {
           const data = await res.json();
           setAuditLogs(data.items || []);
@@ -43,12 +43,12 @@ export default function LogsTab() {
 
   useEffect(() => {
     setPage(1);
-    fetchLogs(1);
+    fetchLogs(1, limit);
   }, [subTab]);
 
   useEffect(() => {
-    fetchLogs(page);
-  }, [page]);
+    fetchLogs(page, limit);
+  }, [page, limit]);
 
   return (
     <div className="space-y-6 animate-tab-in">
@@ -166,14 +166,33 @@ export default function LogsTab() {
         )}
 
         {/* Pagination Bar */}
-        {pages > 1 && (
-          <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
-            <div>
+        <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+          <div className="flex items-center gap-4">
+            <span>
               {t('showingEntries')
-                .replace('{start}', String((page - 1) * limit + 1))
+                .replace('{start}', String(total > 0 ? (page - 1) * limit + 1 : 0))
                 .replace('{end}', String(Math.min(page * limit, total)))
                 .replace('{total}', String(total))}
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <select
+                value={limit}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>{t('perPage')}</span>
             </div>
+          </div>
+
+          {pages > 1 && (
             <div className="flex items-center gap-2">
               <button
                 disabled={page <= 1}
@@ -195,8 +214,8 @@ export default function LogsTab() {
                 <ChevronRight size={14} />
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

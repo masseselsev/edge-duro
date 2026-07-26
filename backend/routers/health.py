@@ -232,7 +232,7 @@ def get_system_metrics():
 @router.get("/logs/system", response_model=schemas.PaginatedSystemLogsResponse)
 def get_system_logs(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     query = db.query(models.SystemLog)
@@ -251,7 +251,7 @@ def get_system_logs(
 @router.get("/logs/audit", response_model=schemas.PaginatedAuditLogsResponse)
 def get_audit_logs(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     query = db.query(models.AuditLog)

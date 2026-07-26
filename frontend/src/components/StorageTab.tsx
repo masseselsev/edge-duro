@@ -35,17 +35,20 @@ export default function StorageTab() {
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
   const [page, setPage] = useState(1);
-  const limit = 15;
+  const [limit, setLimit] = useState(25);
 
   const fetchStorageData = async () => {
     setLoading(true);
     try {
       const [sumRes, artRes] = await Promise.all([
         fetch('/api/storage/summary'),
-        fetch('/api/storage/artifacts')
+        fetch('/api/storage/artifacts?page=1&limit=1000')
       ]);
       if (sumRes.ok) setSummary(await sumRes.json());
-      if (artRes.ok) setArtifacts(await artRes.json());
+      if (artRes.ok) {
+        const data = await artRes.json();
+        setArtifacts(Array.isArray(data) ? data : (data.items || []));
+      }
     } catch (err) {
       console.error('Failed to fetch storage data:', err);
     } finally {
@@ -334,14 +337,33 @@ export default function StorageTab() {
         )}
 
         {/* Pagination Bar */}
-        {pages > 1 && (
-          <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
-            <div>
+        <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+          <div className="flex items-center gap-4">
+            <span>
               {t('showingEntries')
-                .replace('{start}', String((page - 1) * limit + 1))
+                .replace('{start}', String(filteredArtifacts.length > 0 ? (page - 1) * limit + 1 : 0))
                 .replace('{end}', String(Math.min(page * limit, filteredArtifacts.length)))
                 .replace('{total}', String(filteredArtifacts.length))}
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <select
+                value={limit}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>{t('perPage')}</span>
             </div>
+          </div>
+
+          {pages > 1 && (
             <div className="flex items-center gap-2">
               <button
                 disabled={page <= 1}
@@ -363,8 +385,8 @@ export default function StorageTab() {
                 <ChevronRight size={14} />
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Delete Single Confirmation Modal */}

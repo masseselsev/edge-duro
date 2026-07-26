@@ -62,7 +62,7 @@ def list_builds(
     recipe_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Build).options(defer(models.Build.log_output))

@@ -142,7 +142,8 @@ export const translations: Record<Language, Record<string, string>> = {
     previous: 'Previous',
     next: 'Next',
     pageOf: 'Page {page} of {pages}',
-    showingEntries: 'Showing {start}-{end} of {total} entries'
+    showingEntries: 'Showing {start}-{end} of {total} entries',
+    perPage: 'per page'
   },
 
   ru: {
@@ -277,7 +278,8 @@ export const translations: Record<Language, Record<string, string>> = {
     previous: 'Назад',
     next: 'Вперед',
     pageOf: 'Страница {page} из {pages}',
-    showingEntries: 'Показано {start}–{end} из {total} записей'
+    showingEntries: 'Показано {start}–{end} из {total} записей',
+    perPage: 'на страницу'
   },
 
   uk: {

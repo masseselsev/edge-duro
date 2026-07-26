@@ -23,6 +23,36 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     }
     mkosi_arch = arch_map.get((recipe.architecture or "amd64").lower(), "x86-64")
 
+    COMMON_REMOVE_FILES = [
+        "/usr/lib/firmware/nvidia*",
+        "/usr/lib/firmware/amdgpu*",
+        "/usr/lib/firmware/radeon*",
+        "/usr/lib/firmware/qcom*",
+        "/usr/lib/firmware/mellanox*",
+        "/usr/lib/firmware/mrvl*",
+        "/usr/lib/firmware/mediatek*",
+        "/usr/lib/firmware/broadcom*",
+        "/usr/lib/firmware/brcm*",
+        "/usr/lib/firmware/ath9k*",
+        "/usr/lib/firmware/ath10k*",
+        "/usr/lib/firmware/ath11k*",
+        "/usr/lib/firmware/ath12k*",
+        "/usr/lib/firmware/cxgb3*",
+        "/usr/lib/firmware/cxgb4*",
+        "/usr/lib/firmware/liquidio*",
+        "/usr/lib/firmware/netronome*",
+        "/usr/share/doc",
+        "/usr/share/man",
+        "/usr/share/info",
+        "/usr/share/help",
+        "/usr/share/gtk-doc",
+        "/usr/share/locale/*",
+        "/usr/share/sounds/*",
+        "/usr/share/icons/*",
+        "/var/cache/apt/*",
+        "/var/lib/apt/lists/*",
+    ]
+
     distro = (recipe.distribution or "debian").lower()
     if "debian" in distro:
         mkosi_distro = "debian"
@@ -33,6 +63,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "acpi-support": "acpi-support-base",
             "intel-media-driver": "intel-media-va-driver-non-free",
         }
+        remove_files = COMMON_REMOVE_FILES
     elif "ubuntu" in distro:
         mkosi_distro = "ubuntu"
         components = "main restricted universe multiverse"
@@ -45,68 +76,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "systemd-sysv": "",
             "coreutils": "",
         }
-        remove_files = [
-            "/usr/lib/firmware/nvidia*",
-            "/usr/lib/firmware/amdgpu*",
-            "/usr/lib/firmware/radeon*",
-            "/usr/lib/firmware/qcom*",
-            "/usr/lib/firmware/mellanox*",
-            "/usr/lib/firmware/mrvl*",
-            "/usr/lib/firmware/mediatek*",
-            "/usr/lib/firmware/broadcom*",
-            "/usr/lib/firmware/brcm*",
-            "/usr/lib/firmware/ath9k*",
-            "/usr/lib/firmware/ath10k*",
-            "/usr/lib/firmware/ath11k*",
-            "/usr/lib/firmware/ath12k*",
-            "/usr/lib/firmware/cxgb3*",
-            "/usr/lib/firmware/cxgb4*",
-            "/usr/lib/firmware/liquidio*",
-            "/usr/lib/firmware/netronome*",
-            "/usr/share/doc",
-            "/usr/share/man",
-            "/usr/share/info",
-            "/usr/share/help",
-            "/usr/share/gtk-doc",
-            "/usr/share/locale/*",
-            "/usr/share/sounds/*",
-            "/usr/share/icons/*",
-            "/var/cache/apt/*",
-            "/var/lib/apt/lists/*",
-        ]
+        remove_files = COMMON_REMOVE_FILES
     else:
         mkosi_distro = recipe.distribution
         components = "main"
         pkg_map = {}
-        remove_files = [
-            "/usr/lib/firmware/nvidia*",
-            "/usr/lib/firmware/amdgpu*",
-            "/usr/lib/firmware/radeon*",
-            "/usr/lib/firmware/qcom*",
-            "/usr/lib/firmware/mellanox*",
-            "/usr/lib/firmware/mrvl*",
-            "/usr/lib/firmware/mediatek*",
-            "/usr/lib/firmware/broadcom*",
-            "/usr/lib/firmware/brcm*",
-            "/usr/lib/firmware/ath9k*",
-            "/usr/lib/firmware/ath10k*",
-            "/usr/lib/firmware/ath11k*",
-            "/usr/lib/firmware/ath12k*",
-            "/usr/lib/firmware/cxgb3*",
-            "/usr/lib/firmware/cxgb4*",
-            "/usr/lib/firmware/liquidio*",
-            "/usr/lib/firmware/netronome*",
-            "/usr/share/doc",
-            "/usr/share/man",
-            "/usr/share/info",
-            "/usr/share/help",
-            "/usr/share/gtk-doc",
-            "/usr/share/locale/*",
-            "/usr/share/sounds/*",
-            "/usr/share/icons/*",
-            "/var/cache/apt/*",
-            "/var/lib/apt/lists/*",
-        ]
+        remove_files = COMMON_REMOVE_FILES
 
     mapped_pkgs = []
     for p in std_pkgs:

@@ -42,6 +42,19 @@ export default function LogsTab() {
     }
   };
 
+  const handlePurgeLogs = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/logs/purge', { method: 'POST' });
+      setPage(1);
+      await fetchLogs(1, limit);
+    } catch (err) {
+      console.error('Failed to purge logs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const savedLimit = getSavedLimit(`logs_${subTab}`, 25);
     setLimit(savedLimit);
@@ -83,6 +96,14 @@ export default function LogsTab() {
               <span>{t('auditLogs')}</span>
             </button>
           </div>
+
+          <button
+            onClick={handlePurgeLogs}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-medium text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+            title="Purge logs older than retention period now"
+          >
+            <span>Clean Expired Logs</span>
+          </button>
 
           <button
             onClick={() => fetchLogs()}

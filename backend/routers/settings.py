@@ -38,8 +38,17 @@ def update_settings(
         settings.language = payload.language
     if payload.duro_workspace_path:
         settings.duro_workspace_path = payload.duro_workspace_path
+    if hasattr(payload, "log_retention_days") and payload.log_retention_days is not None:
+        settings.log_retention_days = payload.log_retention_days
 
     db.commit()
     db.refresh(settings)
+
+    try:
+        from routers.health import purge_expired_logs
+        purge_expired_logs(db, settings.log_retention_days)
+    except Exception:
+        pass
+
     log_user_action(db, current_user.username, "UPDATE_SETTINGS", "Updated global settings", request)
     return settings

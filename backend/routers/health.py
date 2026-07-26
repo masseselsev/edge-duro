@@ -230,6 +230,30 @@ def get_system_metrics():
     }
 
 
+def purge_expired_logs(db: Session, days: int = None) -> int:
+    if days is None:
+        sett = db.query(models.Settings).first()
+        days = sett.log_retention_days if (sett and hasattr(sett, "log_retention_days") and sett.log_retention_days) else 3
+
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    total_deleted = 0
+    try:
+        sys_deleted = db.query(models.SystemLog).filter(models.SystemLog.created_at < cutoff_date).delete(synchronize_session=False)
+        aud_deleted = db.query(models.AuditLog).filter(models.AuditLog.created_at < cutoff_date).delete(synchronize_session=False)
+        db.commit()
+        total_deleted = (sys_deleted or 0) + (aud_deleted or 0)
+    except Exception as e:
+        logger.error(f"Error purging expired logs: {e}")
+        db.rollback()
+    return total_deleted
+
+
+@router.post("/logs/purge")
+def trigger_purge_logs(db: Session = Depends(get_db)):
+    deleted_count = purge_expired_logs(db)
+    return {"status": "success", "deleted_entries": deleted_count}
+
+
 @router.get("/logs/system", response_model=schemas.PaginatedSystemLogsResponse)
 def get_system_logs(
     page: int = Query(default=1, ge=1),
@@ -237,17 +261,13 @@ def get_system_logs(
     days: Optional[int] = Query(default=None, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
+    purge_expired_logs(db, days)
+
     if days is None:
         sett = db.query(models.Settings).first()
-        days = sett.log_retention_days if sett and hasattr(sett, "log_retention_days") else 3
+        days = sett.log_retention_days if (sett and hasattr(sett, "log_retention_days") and sett.log_retention_days) else 3
 
     cutoff_date = datetime.utcnow() - timedelta(days=days)
-
-    try:
-        db.query(models.SystemLog).filter(models.SystemLog.created_at < cutoff_date).delete(synchronize_session=False)
-        db.commit()
-    except Exception:
-        db.rollback()
 
     query = db.query(models.SystemLog).filter(models.SystemLog.created_at >= cutoff_date)
     total = query.count()
@@ -269,17 +289,13 @@ def get_audit_logs(
     days: Optional[int] = Query(default=None, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
+    purge_expired_logs(db, days)
+
     if days is None:
         sett = db.query(models.Settings).first()
-        days = sett.log_retention_days if sett and hasattr(sett, "log_retention_days") else 3
+        days = sett.log_retention_days if (sett and hasattr(sett, "log_retention_days") and sett.log_retention_days) else 3
 
     cutoff_date = datetime.utcnow() - timedelta(days=days)
-
-    try:
-        db.query(models.AuditLog).filter(models.AuditLog.created_at < cutoff_date).delete(synchronize_session=False)
-        db.commit()
-    except Exception:
-        db.rollback()
 
     query = db.query(models.AuditLog).filter(models.AuditLog.created_at >= cutoff_date)
     total = query.count()

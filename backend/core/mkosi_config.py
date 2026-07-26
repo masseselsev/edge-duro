@@ -45,10 +45,22 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "systemd-sysv": "",
             "coreutils": "",
         }
+        remove_pkgs = [
+            "linux-firmware-nvidia-graphics",
+            "linux-firmware-amd-graphics",
+            "linux-firmware-qualcomm-misc",
+            "linux-firmware-qualcomm-wireless",
+            "linux-firmware-mellanox-spectrum",
+            "linux-firmware-marvell-prestera",
+            "linux-firmware-mediatek",
+            "linux-firmware-broadcom-wireless",
+            "amd64-microcode",
+        ]
     else:
         mkosi_distro = recipe.distribution
         components = "main"
         pkg_map = {}
+        remove_pkgs = []
 
     mapped_pkgs = []
     for p in std_pkgs:
@@ -100,9 +112,16 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "[Content]",
         "WithRecommends=no",
         f"Packages=\n    {packages_formatted}",
+    ]
+
+    if remove_pkgs:
+        remove_formatted = "\n    ".join(remove_pkgs)
+        config_lines.append(f"RemovePackages=\n    {remove_formatted}")
+
+    config_lines.extend([
         "Autologin=yes",
         "SkeletonTrees=mkosi.skeleton",
-    ]
+    ])
 
     if recipe.kernel_params and recipe.kernel_params.strip():
         config_lines.append(f"KernelCommandLine={recipe.kernel_params.strip()}")

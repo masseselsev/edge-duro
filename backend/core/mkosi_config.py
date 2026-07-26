@@ -24,7 +24,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     mkosi_arch = arch_map.get((recipe.architecture or "amd64").lower(), "x86-64")
 
     distro = (recipe.distribution or "debian").lower()
-    if distro == "debian":
+    if "debian" in distro:
+        mkosi_distro = "debian"
         components = "main contrib non-free non-free-firmware"
         debian_pkg_map = {
             "linux-image-generic": "linux-image-amd64",
@@ -33,7 +34,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "intel-media-driver": "intel-media-va-driver-non-free",
         }
         std_pkgs = [debian_pkg_map.get(p.lower(), p) for p in std_pkgs]
-    elif distro == "ubuntu":
+    elif "ubuntu" in distro:
+        mkosi_distro = "ubuntu"
         components = "main restricted universe multiverse"
         ubuntu_pkg_map = {
             "linux-image-amd64": "linux-image-generic",
@@ -46,7 +48,10 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         }
         std_pkgs = [ubuntu_pkg_map.get(p.lower(), p) for p in std_pkgs if ubuntu_pkg_map.get(p.lower(), p) != ""]
     else:
+        mkosi_distro = recipe.distribution
         components = "main"
+
+    packages_formatted = "\n    ".join(std_pkgs)
 
     # Inject APT sources list into mkosi.extra tree
     extra_apt_dir = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "sources.list.d")
@@ -70,7 +75,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
 
     config_lines = [
         "[Distribution]",
-        f"Distribution={recipe.distribution}",
+        f"Distribution={mkosi_distro}",
         f"Release={recipe.release}",
         f"Architecture={mkosi_arch}",
         f"Repositories={components}",

@@ -7,6 +7,7 @@ import PackageSelector from './PackageSelector';
 import AptRepoManager, { AptRepo } from './AptRepoManager';
 import AssetInjector from './AssetInjector';
 import ScriptManager from './ScriptManager';
+import AdvancedEditor from './AdvancedEditor';
 import PartitionEditor, { Partition, DEFAULT_EDGE_BOX_PARTITIONS } from './PartitionEditor';
 import { SearchableSelect } from './SearchableSelect';
 

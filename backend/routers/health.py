@@ -229,17 +229,39 @@ def get_system_metrics():
     }
 
 
-@router.get("/logs/system", response_model=List[schemas.SystemLogResponse])
+@router.get("/logs/system", response_model=schemas.PaginatedSystemLogsResponse)
 def get_system_logs(
-    limit: int = Query(default=100, ge=1, le=1000),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    return db.query(models.SystemLog).order_by(models.SystemLog.created_at.desc()).limit(limit).all()
+    query = db.query(models.SystemLog)
+    total = query.count()
+    items = query.order_by(models.SystemLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    pages = (total + limit - 1) // limit if total > 0 else 1
+    return schemas.PaginatedSystemLogsResponse(
+        items=[schemas.SystemLogResponse.model_validate(i) for i in items],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )
 
 
-@router.get("/logs/audit", response_model=List[schemas.AuditLogResponse])
+@router.get("/logs/audit", response_model=schemas.PaginatedAuditLogsResponse)
 def get_audit_logs(
-    limit: int = Query(default=100, ge=1, le=1000),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    return db.query(models.AuditLog).order_by(models.AuditLog.created_at.desc()).limit(limit).all()
+    query = db.query(models.AuditLog)
+    total = query.count()
+    items = query.order_by(models.AuditLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    pages = (total + limit - 1) // limit if total > 0 else 1
+    return schemas.PaginatedAuditLogsResponse(
+        items=[schemas.AuditLogResponse.model_validate(i) for i in items],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )

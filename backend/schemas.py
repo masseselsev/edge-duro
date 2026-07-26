@@ -168,6 +168,14 @@ class SystemLogResponse(UTCModel):
     created_at: datetime
 
 
+class PaginatedSystemLogsResponse(BaseModel):
+    items: List[SystemLogResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
 class AuditLogResponse(UTCModel):
     id: int
     username: str
@@ -175,3 +183,11 @@ class AuditLogResponse(UTCModel):
     details: Optional[str] = None
     ip_address: Optional[str] = None
     created_at: datetime
+
+
+class PaginatedAuditLogsResponse(BaseModel):
+    items: List[AuditLogResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int

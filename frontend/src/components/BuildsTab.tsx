@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText } from 'lucide-react';
+import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BuildLogStream from './BuildLogStream';
 import RecipeViewerModal from './RecipeViewerModal';
@@ -11,13 +11,20 @@ export default function BuildsTab() {
   const [activeLogBuild, setActiveLogBuild] = useState<any | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
-  const fetchBuilds = async (isInitial = false) => {
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 15;
+
+  const fetchBuilds = async (isInitial = false, pageNum = page) => {
     if (isInitial) setLoading(true);
     try {
-      const res = await fetch('/api/builds?limit=50');
+      const res = await fetch(`/api/builds?page=${pageNum}&limit=${limit}`);
       if (res.ok) {
         const data = await res.json();
         setBuilds(data.items || []);
+        setTotal(data.total || 0);
+        setPages(data.pages || 1);
       }
     } catch (err) {
       console.error('Failed to fetch builds:', err);
@@ -27,10 +34,10 @@ export default function BuildsTab() {
   };
 
   useEffect(() => {
-    fetchBuilds(true);
-    const interval = setInterval(() => fetchBuilds(false), 8000);
+    fetchBuilds(true, page);
+    const interval = setInterval(() => fetchBuilds(false, page), 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [page]);
 
   const handleCancel = async (buildId: string) => {
     try {
@@ -156,6 +163,39 @@ export default function BuildsTab() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {pages > 1 && (
+          <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+            <div>
+              {t('showingEntries')
+                .replace('{start}', String((page - 1) * limit + 1))
+                .replace('{end}', String(Math.min(page * limit, total)))
+                .replace('{total}', String(total))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p: number) => Math.max(p - 1, 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+                <span>{t('previous')}</span>
+              </button>
+              <span className="px-2 font-mono font-medium text-zinc-300">
+                {t('pageOf').replace('{page}', String(page)).replace('{pages}', String(pages))}
+              </span>
+              <button
+                disabled={page >= pages}
+                onClick={() => setPage((p: number) => Math.min(p + 1, pages))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <span>{t('next')}</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

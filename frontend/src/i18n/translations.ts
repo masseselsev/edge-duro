@@ -138,7 +138,11 @@ export const translations: Record<Language, Record<string, string>> = {
     logMessage: 'Message',
     userAction: 'Action',
     userDetails: 'Details',
-    ipAddress: 'IP Address'
+    ipAddress: 'IP Address',
+    previous: 'Previous',
+    next: 'Next',
+    pageOf: 'Page {page} of {pages}',
+    showingEntries: 'Showing {start}-{end} of {total} entries'
   },
 
   ru: {
@@ -269,7 +273,11 @@ export const translations: Record<Language, Record<string, string>> = {
     logMessage: 'Сообщение',
     userAction: 'Действие',
     userDetails: 'Детали',
-    ipAddress: 'IP-адрес'
+    ipAddress: 'IP-адрес',
+    previous: 'Назад',
+    next: 'Вперед',
+    pageOf: 'Страница {page} из {pages}',
+    showingEntries: 'Показано {start}–{end} из {total} записей'
   },
 
   uk: {

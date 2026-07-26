@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, Shield, RefreshCw, Loader2 } from 'lucide-react';
+import { Terminal, Shield, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
 export default function LogsTab() {
@@ -9,15 +9,30 @@ export default function LogsTab() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLogs = async () => {
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 15;
+
+  const fetchLogs = async (pageNum = page) => {
     setLoading(true);
     try {
       if (subTab === 'system') {
-        const res = await fetch('/api/logs/system');
-        if (res.ok) setSystemLogs(await res.json());
+        const res = await fetch(`/api/logs/system?page=${pageNum}&limit=${limit}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSystemLogs(data.items || []);
+          setTotal(data.total || 0);
+          setPages(data.pages || 1);
+        }
       } else {
-        const res = await fetch('/api/logs/audit');
-        if (res.ok) setAuditLogs(await res.json());
+        const res = await fetch(`/api/logs/audit?page=${pageNum}&limit=${limit}`);
+        if (res.ok) {
+          const data = await res.json();
+          setAuditLogs(data.items || []);
+          setTotal(data.total || 0);
+          setPages(data.pages || 1);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch logs:', err);
@@ -27,8 +42,13 @@ export default function LogsTab() {
   };
 
   useEffect(() => {
-    fetchLogs();
+    setPage(1);
+    fetchLogs(1);
   }, [subTab]);
+
+  useEffect(() => {
+    fetchLogs(page);
+  }, [page]);
 
   return (
     <div className="space-y-6 animate-tab-in">
@@ -142,6 +162,39 @@ export default function LogsTab() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {pages > 1 && (
+          <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+            <div>
+              {t('showingEntries')
+                .replace('{start}', String((page - 1) * limit + 1))
+                .replace('{end}', String(Math.min(page * limit, total)))
+                .replace('{total}', String(total))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p: number) => Math.max(p - 1, 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+                <span>{t('previous')}</span>
+              </button>
+              <span className="px-2 font-mono font-medium text-zinc-300">
+                {t('pageOf').replace('{page}', String(page)).replace('{pages}', String(pages))}
+              </span>
+              <button
+                disabled={page >= pages}
+                onClick={() => setPage((p: number) => Math.min(p + 1, pages))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <span>{t('next')}</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search } from 'lucide-react';
+import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeViewerModal from './RecipeViewerModal';
 
@@ -33,6 +33,9 @@ export default function StorageTab() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
+
+  const [page, setPage] = useState(1);
+  const limit = 15;
 
   const fetchStorageData = async () => {
     setLoading(true);
@@ -103,6 +106,8 @@ export default function StorageTab() {
   const filteredArtifacts = artifacts.filter((a) =>
     a.filename.toLowerCase().includes(search.toLowerCase())
   );
+  const pages = Math.ceil(filteredArtifacts.length / limit) || 1;
+  const paginatedArtifacts = filteredArtifacts.slice((page - 1) * limit, page * limit);
 
   return (
     <div className="space-y-6">
@@ -233,7 +238,7 @@ export default function StorageTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50 text-xs">
-                {filteredArtifacts.map((art) => {
+                {paginatedArtifacts.map((art) => {
                   const isSelected = selectedFiles.includes(art.filename);
                   return (
                     <tr
@@ -325,6 +330,39 @@ export default function StorageTab() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {pages > 1 && (
+          <div className="px-6 py-3 border-t border-zinc-800/80 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400">
+            <div>
+              {t('showingEntries')
+                .replace('{start}', String((page - 1) * limit + 1))
+                .replace('{end}', String(Math.min(page * limit, filteredArtifacts.length)))
+                .replace('{total}', String(filteredArtifacts.length))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p: number) => Math.max(p - 1, 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+                <span>{t('previous')}</span>
+              </button>
+              <span className="px-2 font-mono font-medium text-zinc-300">
+                {t('pageOf').replace('{page}', String(page)).replace('{pages}', String(pages))}
+              </span>
+              <button
+                disabled={page >= pages}
+                onClick={() => setPage((p: number) => Math.min(p + 1, pages))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 transition-colors cursor-pointer"
+              >
+                <span>{t('next')}</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>

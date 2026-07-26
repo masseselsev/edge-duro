@@ -80,8 +80,20 @@ def get_storage_summary():
     )
 
 
-@router.get("/artifacts", response_model=List[ArtifactInfo])
-def list_artifacts(db: Session = Depends(get_db)):
+class PaginatedArtifactsResponse(BaseModel):
+    items: List[ArtifactInfo]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
+@router.get("/artifacts", response_model=PaginatedArtifactsResponse)
+def list_artifacts(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
     outputs_dir = get_outputs_dir()
     items = []
 
@@ -128,7 +140,19 @@ def list_artifacts(db: Session = Depends(get_db)):
                 ))
 
     items.sort(key=lambda x: x.modified_at, reverse=True)
-    return items
+    total = len(items)
+    start = (page - 1) * limit
+    end = start + limit
+    paginated_items = items[start:end]
+    pages = (total + limit - 1) // limit if total > 0 else 1
+
+    return PaginatedArtifactsResponse(
+        items=paginated_items,
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )
 
 
 @router.get("/artifacts/{filename}/download")

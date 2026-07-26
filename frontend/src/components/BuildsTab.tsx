@@ -53,7 +53,7 @@ export default function BuildsTab() {
         </div>
 
         <button
-          onClick={fetchBuilds}
+          onClick={() => fetchBuilds(true)}
           className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 transition-colors cursor-pointer"
           title="Refresh"
         >

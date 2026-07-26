@@ -85,6 +85,14 @@ class AptRepositorySchema(BaseModel):
     gpg_key_filename: Optional[str] = None
 
 
+class PartitionSchema(BaseModel):
+    mountpoint: str = Field(default="/")
+    size: str = Field(default="2G")
+    filesystem: str = Field(default="ext4")
+    type: str = Field(default="root")
+    label: Optional[str] = None
+
+
 class RecipeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -100,6 +108,7 @@ class RecipeBase(BaseModel):
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
+    partitions: List[PartitionSchema] = Field(default_factory=list)
     raw_mkosi_conf: Optional[str] = None
     raw_preseed_cfg: Optional[str] = None
     raw_postinst: Optional[str] = None

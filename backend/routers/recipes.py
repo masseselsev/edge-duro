@@ -36,6 +36,8 @@ def create_recipe(
     recipe_data = payload.model_dump()
     if "repositories" in recipe_data:
         recipe_data["repositories"] = [r if isinstance(r, dict) else r.dict() for r in payload.repositories]
+    if "partitions" in recipe_data:
+        recipe_data["partitions"] = [p if isinstance(p, dict) else p.dict() for p in payload.partitions]
 
     recipe = models.Recipe(**recipe_data)
     db.add(recipe)
@@ -80,6 +82,8 @@ def update_recipe(
     for key, value in update_data.items():
         if key == "repositories":
             setattr(recipe, key, [r if isinstance(r, dict) else r.dict() for r in payload.repositories])
+        elif key == "partitions":
+            setattr(recipe, key, [p if isinstance(p, dict) else p.dict() for p in payload.partitions])
         else:
             setattr(recipe, key, value)
 

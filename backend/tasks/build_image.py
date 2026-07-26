@@ -29,7 +29,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         # 1. Prepare Workspace & Extra Tree
         log_to_task(build_id, "[STEP 1/4] Preparing workspace directory and overlay filesystem...")
-        ws_path = prepare_workspace(recipe.id)
+        ws_path = prepare_workspace(recipe.id, recipe)
         populate_extra_tree(recipe, assets, ws_path)
 
         # Pre-download all Edge platform packages into mkosi.extra/opt/edge_packages/

@@ -7,7 +7,7 @@ import PackageSelector from './PackageSelector';
 import AptRepoManager, { AptRepo } from './AptRepoManager';
 import AssetInjector from './AssetInjector';
 import ScriptManager from './ScriptManager';
-import AdvancedEditor from './AdvancedEditor';
+import PartitionEditor, { Partition, DEFAULT_EDGE_BOX_PARTITIONS } from './PartitionEditor';
 import { SearchableSelect } from './SearchableSelect';
 
 interface RecipeBuilderModalProps {
@@ -52,6 +52,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [outputFormats, setOutputFormats] = useState<string[]>(recipe?.output_formats || ['raw_xz']);
   const [packages, setPackages] = useState<string[]>(recipe?.packages || []);
   const [repositories, setRepositories] = useState<AptRepo[]>(recipe?.repositories || []);
+  const [partitions, setPartitions] = useState<Partition[]>(recipe?.partitions && recipe.partitions.length > 0 ? recipe.partitions : DEFAULT_EDGE_BOX_PARTITIONS);
   const [hostname, setHostname] = useState(recipe?.hostname || 'edge-node');
   const [hostnameFromNetif, setHostnameFromNetif] = useState<boolean>(recipe?.hostname_from_netif || false);
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
@@ -93,6 +94,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       output_formats: outputFormats,
       packages,
       repositories,
+      partitions,
       hostname: hostname.trim() || 'edge-node',
       hostname_from_netif: hostnameFromNetif,
       timezone: timezone || 'UTC',
@@ -253,6 +255,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
 
           <PackageSelector packages={packages} onChange={setPackages} />
           <AptRepoManager repositories={repositories} onChange={setRepositories} />
+          <PartitionEditor partitions={partitions} onChange={setPartitions} />
           <AssetInjector recipeId={recipe?.id} assets={assets} onUpload={handleAssetUpload} onDelete={handleAssetDelete} />
           <ScriptManager postinstScript={rawPostinst} onChange={setRawPostinst} />
 

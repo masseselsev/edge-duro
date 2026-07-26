@@ -4,7 +4,7 @@ from typing import List
 from models import Recipe, RecipeAsset
 
 
-def prepare_workspace(recipe_id: int) -> str:
+def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
     """
     Creates isolated workspace directory structure for mkosi build.
     """
@@ -35,11 +35,56 @@ def prepare_workspace(recipe_id: int) -> str:
         os.makedirs(os.path.join(recipe_ws, d), exist_ok=True)
 
     repart_dir = os.path.join(recipe_ws, "mkosi.repart")
+    if os.path.exists(repart_dir):
+        shutil.rmtree(repart_dir, ignore_errors=True)
     os.makedirs(repart_dir, exist_ok=True)
-    with open(os.path.join(repart_dir, "10-esp.conf"), "w") as f:
-        f.write("[Partition]\nType=esp\nFormat=vfat\nCopyFiles=/boot:/\nSizeMinBytes=512M\n")
-    with open(os.path.join(repart_dir, "20-root.conf"), "w") as f:
-        f.write("[Partition]\nType=root\nFormat=ext4\nCopyFiles=/\nSizeMinBytes=2G\n")
+
+    partitions = (recipe.partitions if (recipe and recipe.partitions) else None) or [
+        {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "ESP"},
+        {"mountpoint": "/", "size": "8G", "filesystem": "ext4", "type": "root", "label": "edgeroot"},
+        {"mountpoint": "/var/log/edge", "size": "1G", "filesystem": "ext4", "type": "generic", "label": "edgelog"},
+        {"mountpoint": "/var/opt/edge", "size": "max", "filesystem": "ext4", "type": "generic", "label": "edgestor"},
+    ]
+
+    for idx, p in enumerate(partitions, start=1):
+        p_type = (p.get("type") or "generic").lower()
+        p_fs = (p.get("filesystem") or "ext4").lower()
+        p_size = str(p.get("size") or "2G")
+        p_mount = p.get("mountpoint") or "/"
+        p_label = p.get("label") or f"part{idx}"
+
+        conf_filename = f"{idx * 10:02d}-{p_type}-{p_label}.conf"
+        conf_path = os.path.join(repart_dir, conf_filename)
+
+        lines = ["[Partition]"]
+        if p_type == "esp":
+            lines.append("Type=esp")
+            lines.append("Format=vfat")
+            lines.append("CopyFiles=/boot:/")
+        elif p_type == "root":
+            lines.append("Type=root")
+            lines.append(f"Format={p_fs}")
+            lines.append("CopyFiles=/")
+        elif p_type == "swap":
+            lines.append("Type=swap")
+            lines.append("Format=swap")
+        else:
+            lines.append("Type=linux-generic")
+            lines.append(f"Format={p_fs}")
+            if p_mount and p_mount != "/":
+                lines.append(f"CopyFiles={p_mount}")
+
+        if p_label:
+            lines.append(f"Label={p_label}")
+
+        if p_size and p_size.lower() not in ["max", "100%", "auto"]:
+            size_val = p_size.upper()
+            if not size_val.endswith("M") and not size_val.endswith("G") and not size_val.endswith("B"):
+                size_val += "M"
+            lines.append(f"SizeMinBytes={size_val}")
+
+        with open(conf_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
 
     os.makedirs(os.path.join(base_dir, "cache", "apt"), exist_ok=True)
     return recipe_ws

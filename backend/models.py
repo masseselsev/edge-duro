@@ -59,6 +59,7 @@ class Recipe(Base):
     ssh_keys = Column(JSON, nullable=False, default=list)
 
     kernel_params = Column(String, nullable=True)
+    partitions = Column(JSON, nullable=False, default=list)
     raw_mkosi_conf = Column(Text, nullable=True)
     raw_preseed_cfg = Column(Text, nullable=True)
     raw_postinst = Column(Text, nullable=True)

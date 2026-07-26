@@ -97,6 +97,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "OutputDirectory=output",
         "",
         "[Content]",
+        "ESPSize=512M",
         f"Packages=\n    {packages_formatted}",
         "Autologin=yes",
         "SkeletonTrees=mkosi.skeleton",

@@ -39,7 +39,7 @@ def prepare_workspace(recipe_id: int) -> str:
     with open(os.path.join(repart_dir, "10-esp.conf"), "w") as f:
         f.write("[Partition]\nType=esp\nFormat=vfat\nSizeMinBytes=512M\n")
     with open(os.path.join(repart_dir, "20-root.conf"), "w") as f:
-        f.write("[Partition]\nType=root\nFormat=ext4\nSizeMinBytes=4G\n")
+        f.write("[Partition]\nType=root\nFormat=ext4\nSizeMinBytes=2G\n")
 
     pref_content = """Package: linux-firmware linux-firmware-nvidia-* linux-firmware-amd-* linux-firmware-qualcomm-* linux-firmware-mellanox-* linux-firmware-marvell-* linux-firmware-mediatek-* linux-firmware-broadcom-* linux-firmware-qlogic linux-firmware-netronome amd64-microcode
 Pin: release *

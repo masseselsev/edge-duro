@@ -182,7 +182,7 @@ ROOT="${{BUILDROOT:-/}}"
 # 1. Install pre-downloaded Edge platform .deb packages inside chroot
 if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
   echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
-  chroot "$ROOT" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; dpkg -i --force-depends /opt/edge_packages/*.deb || true"
+  chroot "$ROOT" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH; dpkg -i --force-depends /opt/edge_packages/*.deb || true"
   rm -rf "$ROOT/opt/edge_packages"
 fi
 

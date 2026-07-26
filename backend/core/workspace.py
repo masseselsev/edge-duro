@@ -34,6 +34,13 @@ def prepare_workspace(recipe_id: int) -> str:
     for d in subdirs:
         os.makedirs(os.path.join(recipe_ws, d), exist_ok=True)
 
+    repart_dir = os.path.join(recipe_ws, "mkosi.repart")
+    os.makedirs(repart_dir, exist_ok=True)
+    with open(os.path.join(repart_dir, "10-esp.conf"), "w") as f:
+        f.write("[Partition]\nType=esp\nFormat=vfat\nCopyFiles=/boot:/\nSizeMinBytes=512M\n")
+    with open(os.path.join(repart_dir, "20-root.conf"), "w") as f:
+        f.write("[Partition]\nType=root\nFormat=ext4\nCopyFiles=/\nSizeMinBytes=4G\n")
+
     os.makedirs(os.path.join(base_dir, "cache", "apt"), exist_ok=True)
     return recipe_ws
 

@@ -95,7 +95,6 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "[Output]",
         f"ImageId={recipe.name.lower().replace(' ', '_')}",
         "Format=disk",
-        "ImageSize=4G",
         "OutputDirectory=output",
         "",
         "[Content]",

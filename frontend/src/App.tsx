@@ -375,7 +375,7 @@ function AppContent() {
       </header>
 
       {/* Tab Content */}
-      <main className="flex-1">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 pb-20">
         {renderTabContent()}
       </main>
 

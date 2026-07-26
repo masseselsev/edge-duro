@@ -78,10 +78,10 @@ class LoginPayload(BaseModel):
 
 
 class AptRepositorySchema(BaseModel):
-    name: str
-    url: str
-    suite: str
-    components: str = "main"
+    name: Optional[str] = "custom-repo"
+    url: Optional[str] = ""
+    suite: Optional[str] = ""
+    components: Optional[str] = "main"
     gpg_key_filename: Optional[str] = None
 
 

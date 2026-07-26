@@ -44,7 +44,11 @@ class DBLoggingHandler(logging.Handler):
             name.startswith("sqlalchemy") or
             name.startswith("urllib3") or
             name.startswith("redis") or
-            name.startswith("uvicorn.access") or
+            name.startswith("uvicorn") or
+            name.startswith("fastapi") or
+            name.startswith("starlette") or
+            name.startswith("asyncio") or
+            name.startswith("gunicorn") or
             "insert into system_logs" in record.getMessage().lower()
         ):
             return

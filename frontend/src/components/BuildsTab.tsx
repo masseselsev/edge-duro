@@ -11,8 +11,8 @@ export default function BuildsTab() {
   const [activeLogBuild, setActiveLogBuild] = useState<any | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
 
-  const fetchBuilds = async () => {
-    setLoading(true);
+  const fetchBuilds = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const res = await fetch('/api/builds?limit=50');
       if (res.ok) {
@@ -27,8 +27,8 @@ export default function BuildsTab() {
   };
 
   useEffect(() => {
-    fetchBuilds();
-    const interval = setInterval(fetchBuilds, 8000);
+    fetchBuilds(true);
+    const interval = setInterval(() => fetchBuilds(false), 8000);
     return () => clearInterval(interval);
   }, []);
 

@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sse_starlette.sse import EventSourceResponse
 
 from database import get_db, log_user_action
@@ -65,7 +65,7 @@ def list_builds(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.Build)
+    query = db.query(models.Build).options(defer(models.Build.log_output))
     if recipe_id is not None:
         query = query.filter(models.Build.recipe_id == recipe_id)
     if status:

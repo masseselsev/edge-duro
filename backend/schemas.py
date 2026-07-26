@@ -143,7 +143,7 @@ class BuildResponse(UTCModel):
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
-    log_output: str
+    log_output: Optional[str] = None
     artifact_path: Optional[str] = None
     artifact_size: Optional[int] = None
     iso_artifact_path: Optional[str] = None

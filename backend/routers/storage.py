@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from database import get_db, log_user_action
 import models
@@ -68,15 +68,15 @@ def get_storage_summary():
                 total_files += 1
                 total_bytes += entry.stat().st_size
 
-    total_stat = shutil.disk_usage(outputs_dir)
+    total, used, free = shutil.disk_usage(outputs_dir)
 
     return StorageSummaryResponse(
         outputs_dir=outputs_dir,
         total_files=total_files,
         total_bytes=total_bytes,
         total_human=format_bytes(total_bytes),
-        free_bytes=total_stat.free,
-        free_human=format_bytes(total_stat.free)
+        free_bytes=free,
+        free_human=format_bytes(free)
     )
 
 
@@ -86,7 +86,7 @@ def list_artifacts(db: Session = Depends(get_db)):
     items = []
 
     # Map build artifact paths & log filenames to builds for fast recipe lookup
-    builds = db.query(models.Build).all()
+    builds = db.query(models.Build).options(defer(models.Build.log_output)).all()
     build_map = {}
     for b in builds:
         if b.artifact_path:

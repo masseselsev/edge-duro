@@ -243,9 +243,13 @@ cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
 
 # 1. Install pre-downloaded Edge platform .deb packages inside chroot
 if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
-  echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
+  echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg.  # Mount pseudo-filesystems for apt/dpkg to work correctly
+  mount -t proc proc "$ROOT/proc" 2>/dev/null || true
+  mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true
+  mount --bind /dev "$ROOT/dev" 2>/dev/null || true
+
   chroot "$ROOT" /bin/bash -c "
-    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH
     ln -sf /bin/bash /bin/sh
     mkdir -p /opt/edge/venv/bin /opt/edge/bin /usr/bin
     if [ ! -f /opt/edge/venv/bin/python3.14 ]; then
@@ -280,9 +284,9 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 4. Convert strict 'set -e' to non-blocking 'set +e' in all postinst scripts for chroot build safety
     for pscript in /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.preinst; do
-      if [ -f "$pscript" ]; then
-        sed -i 's/^set -e/set +e/g' "$pscript" 2>/dev/null || true
-        sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' "$pscript" 2>/dev/null || true
+      if [ -f \"\$pscript\" ]; then
+        sed -i 's/^set -e/set +e/g' \"\$pscript\" 2>/dev/null || true
+        sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' \"\$pscript\" 2>/dev/null || true
       fi
     done
 
@@ -293,10 +297,17 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 6. Fetch missing dependencies and configure all unpacked packages
     export DEBIAN_FRONTEND=noninteractive
+    apt-get update --allow-insecure-repositories --allow-unauthenticated || true
     apt-get install -f -y --allow-insecure-repositories --allow-unauthenticated || true
     dpkg --configure --pending --force-depends || true
   "
-  rm -rf "$ROOT/opt/edge_packages"
+
+  # Unmount pseudo-filesystems
+  umount "$ROOT/proc" 2>/dev/null || true
+  umount "$ROOT/sys" 2>/dev/null || true
+  umount -l "$ROOT/dev" 2>/dev/null || true
+
+  rm -rf "$ROOT/opt/edge_packages"ges"
 fi
 
 # 2. Run recipe post-install hooks (timezone, hostname MAC, custom scripts)

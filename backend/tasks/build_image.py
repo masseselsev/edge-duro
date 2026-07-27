@@ -150,10 +150,21 @@ def build_image_task(self, build_id: str, recipe_id: int):
             except Exception:
                 break
 
+        # Flush any remaining data in the line buffer
+        if line_buffer:
+            remaining = line_buffer.decode('utf-8', errors='replace')
+            remaining = ANSI_ESCAPE.sub('', remaining).strip()
+            if remaining:
+                for rem_line in remaining.split('\n'):
+                    rem_line = rem_line.strip()
+                    if rem_line:
+                        log_to_task(build_id, rem_line)
+
         master_file.close()
 
         return_code = process.wait()
         if return_code != 0 and mkosi_bin:
+            log_to_task(build_id, f"[ERROR] mkosi exited with return code {return_code}")
             raise subprocess.CalledProcessError(return_code, cmd)
 
         # 4. Finalize Artifact

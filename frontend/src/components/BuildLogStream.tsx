@@ -34,7 +34,13 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const handleScroll = () => {
+    if (logContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+      const atBottom = scrollHeight - (scrollTop + clientHeight) < 60;
+      setIsAtBottom(atBottom);
+    }
+  };
 
   const displayLogs = React.useMemo(() => {
     if (logs.length === 0) return [];

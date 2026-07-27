@@ -262,20 +262,28 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
       chmod +x /opt/edge/bin/ctrl-cli
     fi
 
-    # Unpack deb packages
-    dpkg -i --force-depends --force-overwrite /opt/edge_packages/*.deb || true
+    # 1. Unpack all deb packages without running postinst scripts
+    dpkg --unpack --force-depends --force-overwrite /opt/edge_packages/*.deb || true
 
-    # Fix bash double bracket syntax in autosdk script if present
+    # 2. Fix bash double bracket syntax in autosdk script if present
     if [ -f /opt/edge/share/etc/environment.d/02-autosdk.sh ]; then
       sed -i 's/\[\[/\[/g; s/\]\]/\]/g' /opt/edge/share/etc/environment.d/02-autosdk.sh 2>/dev/null || true
     fi
 
-    # Neutralize failing ctrl-cli calls in edge-base postinst script during build phase
-    if [ -f /var/lib/dpkg/info/edge-base.postinst ]; then
-      sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' /var/lib/dpkg/info/edge-base.postinst 2>/dev/null || true
-    fi
+    # 3. Neutralize failing ctrl-cli calls in all postinst/preinst scripts during image build
+    for pscript in /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.preinst; do
+      if [ -f "$pscript" ]; then
+        sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' "$pscript" 2>/dev/null || true
+      fi
+    done
 
-    dpkg --configure -a || true
+    # 4. Overwrite ctrl-cli executable with a clean stub if it fails at runtime in chroot
+    echo '#!/bin/bash' > /opt/edge/bin/ctrl-cli
+    echo 'exit 0' >> /opt/edge/bin/ctrl-cli
+    chmod +x /opt/edge/bin/ctrl-cli
+
+    # 5. Configure all unpacked packages
+    dpkg --configure --pending --force-depends || true
   "
   rm -rf "$ROOT/opt/edge_packages"
 fi

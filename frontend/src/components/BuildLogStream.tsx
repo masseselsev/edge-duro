@@ -32,13 +32,15 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const [hasIso, setHasIso] = useState<boolean>(false);
   const [hasRaw, setHasRaw] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const isAutoScrollingRef = useRef<boolean>(false);
+
   const handleScroll = () => {
+    if (isAutoScrollingRef.current) return;
     if (logContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
-      const atBottom = scrollHeight - (scrollTop + clientHeight) < 60;
+      const atBottom = scrollHeight - (scrollTop + clientHeight) < 150;
       setIsAtBottom((prev) => (prev !== atBottom ? atBottom : prev));
     }
   };
@@ -69,7 +71,11 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
 
   useEffect(() => {
     if (isAtBottom && logContainerRef.current) {
+      isAutoScrollingRef.current = true;
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      requestAnimationFrame(() => {
+        isAutoScrollingRef.current = false;
+      });
     }
   }, [displayLogs, isAtBottom]);
 

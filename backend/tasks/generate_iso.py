@@ -228,11 +228,9 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                     "xorriso", "-as", "mkisofs",
                     "-r", "-J", "-joliet-long",
                     "-V", "DURO_BOOT",
-                    "-append_partition", "2", "0xef", efi_img_path,
-                    "-appended_part_as_gpt",
-                    "-eltorito-alt-boot",
-                    "-e", "--interval:appended_partition_2:all::",
+                    "-e", "efi.img",
                     "-no-emul-boot",
+                    "-isohybrid-gpt-basdat",
                     "-o", final_iso_path,
                     iso_staging
                 ]

@@ -256,6 +256,28 @@ fi
 echo "[POSTINST] Stripping non-Intel firmware, documentation, and uninitializing machine-id for firstboot..."
 rm -f "$ROOT"/etc/machine-id || true
 rm -rf "$ROOT"/usr/lib/firmware/nvidia* "$ROOT"/usr/lib/firmware/amdgpu* "$ROOT"/usr/lib/firmware/radeon* "$ROOT"/usr/lib/firmware/qcom* "$ROOT"/usr/lib/firmware/mellanox* "$ROOT"/usr/lib/firmware/mrvl* "$ROOT"/usr/lib/firmware/mediatek* "$ROOT"/usr/lib/firmware/broadcom* "$ROOT"/usr/lib/firmware/brcm* "$ROOT"/usr/lib/firmware/ath9k* "$ROOT"/usr/lib/firmware/ath10k* "$ROOT"/usr/lib/firmware/ath11k* "$ROOT"/usr/lib/firmware/ath12k* "$ROOT"/usr/lib/firmware/cxgb3* "$ROOT"/usr/lib/firmware/cxgb4* "$ROOT"/usr/lib/firmware/liquidio* "$ROOT"/usr/lib/firmware/netronome* "$ROOT"/usr/share/doc/* "$ROOT"/usr/share/man/* "$ROOT"/usr/share/info/* "$ROOT"/usr/share/help/* "$ROOT"/usr/share/gtk-doc/* "$ROOT"/usr/share/locale/* "$ROOT"/usr/share/sounds/* "$ROOT"/usr/share/icons/* "$ROOT"/var/cache/apt/* "$ROOT"/var/lib/apt/lists/* || true
+
+# 4. Ensure systemd-boot bootloader, vmlinuz, and initrd are prepared in /boot (ESP partition)
+echo "[POSTINST] Initializing systemd-boot and copying kernel/initrd into /boot..."
+if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
+  chroot "$ROOT" /bin/bash -c '
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+    bootctl install --no-variables 2>/dev/null || true
+    KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -n1)
+    if [ -n "$KVER" ]; then
+      cp -f "/boot/vmlinuz-$KVER" /boot/vmlinuz 2>/dev/null || cp -f /vmlinuz /boot/vmlinuz 2>/dev/null || true
+      cp -f "/boot/initrd.img-$KVER" /boot/initrd.img 2>/dev/null || cp -f /initrd.img /boot/initrd.img 2>/dev/null || true
+    fi
+    mkdir -p /boot/loader/entries
+    echo "default edge.conf" > /boot/loader/loader.conf
+    echo "timeout 3" >> /boot/loader/loader.conf
+    echo "console-mode max" >> /boot/loader/loader.conf
+    echo "title Edge OS" > /boot/loader/entries/edge.conf
+    echo "linux /vmlinuz" >> /boot/loader/entries/edge.conf
+    echo "initrd /initrd.img" >> /boot/loader/entries/edge.conf
+    echo "options root=LABEL=edgeroot rw console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off" >> /boot/loader/entries/edge.conf
+  ' || true
+fi
 """
     for hk in ["mkosi.postinst", "mkosi.finalize"]:
         postinst_path = os.path.join(workspace_path, hk)

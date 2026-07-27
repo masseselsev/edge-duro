@@ -31,7 +31,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const [status, setStatus] = useState<string>('PENDING');
   const [hasIso, setHasIso] = useState<boolean>(false);
   const [hasRaw, setHasRaw] = useState<boolean>(false);
-  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef<boolean>(false);

@@ -145,41 +145,118 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
 
             try:
                 sf_res = subprocess.run(["sfdisk", "-d", target_raw], capture_output=True, text=True)
+                partitions_info = []
                 if sf_res.returncode == 0:
                     for line in sf_res.stdout.splitlines():
                         line_lower = line.lower()
                         if "start=" in line_lower and ("size=" in line_lower or "type=" in line_lower):
-                            # Look for ESP partition (type C12A7328-... or type=ef)
                             start_match = re.search(r'start=\s*(\d+)', line)
                             size_match = re.search(r'size=\s*(\d+)', line)
+                            type_match = re.search(r'type=\s*(\S+)', line)
                             if start_match and size_match:
-                                start_sector = int(start_match.group(1))
-                                sector_count = int(size_match.group(1))
-                                # Extract ESP partition image
-                                subprocess.run([
-                                    "dd", f"if={target_raw}", f"of={efi_img_path}",
-                                    "bs=512", f"skip={start_sector}", f"count={sector_count}",
-                                    "status=none"
-                                ], check=True)
-                                esp_extracted = os.path.exists(efi_img_path) and os.path.getsize(efi_img_path) > 0
-                                if esp_extracted:
-                                    log_to_task(build_id, f"[ISO] Extracted ESP ({os.path.getsize(efi_img_path)} bytes)")
+                                partitions_info.append({
+                                    "start": int(start_match.group(1)),
+                                    "size": int(size_match.group(1)),
+                                    "type": type_match.group(1) if type_match else "unknown",
+                                    "line": line.strip()
+                                })
 
-                                    # Extract vmlinuz and initrd.img from ESP using mcopy (user-space FAT access)
-                                    mcopy_bin = shutil.which("mcopy")
-                                    if mcopy_bin:
-                                        vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
-                                        initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
-                                        r1 = subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, "::vmlinuz", vmlinuz_dst], capture_output=True, text=True)
-                                        r2 = subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, "::initrd.img", initrd_dst], capture_output=True, text=True)
-                                        if os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0:
-                                            kernel_ready = True
-                                            log_to_task(build_id, f"[ISO] Extracted vmlinuz ({os.path.getsize(vmlinuz_dst)} bytes) and initrd.img from ESP")
-                                        else:
-                                            log_to_task(build_id, f"[ISO WARNING] mcopy vmlinuz extraction failed: {r1.stderr.strip()}")
+                # Extract ESP (first partition — mkosi always puts ESP first)
+                if partitions_info:
+                    esp = partitions_info[0]
+                    subprocess.run([
+                        "dd", f"if={target_raw}", f"of={efi_img_path}",
+                        "bs=512", f"skip={esp['start']}", f"count={esp['size']}",
+                        "status=none"
+                    ], check=True)
+                    esp_extracted = os.path.exists(efi_img_path) and os.path.getsize(efi_img_path) > 0
+
+                    if esp_extracted:
+                        log_to_task(build_id, f"[ISO] Extracted ESP ({os.path.getsize(efi_img_path)} bytes, type={esp['type']})")
+
+                        # List ESP contents for diagnostics
+                        mdir_bin = shutil.which("mdir")
+                        mcopy_bin = shutil.which("mcopy")
+                        if mdir_bin:
+                            mdir_res = subprocess.run([mdir_bin, "-i", efi_img_path, "-/", "::"], capture_output=True, text=True)
+                            if mdir_res.returncode == 0:
+                                esp_files = [l.strip() for l in mdir_res.stdout.splitlines() if l.strip() and "::" in l]
+                                log_to_task(build_id, f"[ISO] ESP contents ({len(esp_files)} entries): {'; '.join(esp_files[:20])}")
+
+                        # Try extracting kernel: check multiple possible paths
+                        if mcopy_bin:
+                            vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
+                            initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
+
+                            # Try direct paths first
+                            vmlinuz_paths = ["::vmlinuz", "::vmlinuz-*"]
+                            initrd_paths = ["::initrd.img", "::initrd.img-*"]
+
+                            # Try each vmlinuz path
+                            for vpath in vmlinuz_paths:
+                                if kernel_ready:
                                     break
+                                r = subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, vpath, vmlinuz_dst], capture_output=True, text=True)
+                                if os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0:
+                                    # Also get initrd
+                                    for ipath in initrd_paths:
+                                        subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, ipath, initrd_dst], capture_output=True, text=True)
+                                        if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
+                                            break
+                                    kernel_ready = True
+                                    log_to_task(build_id, f"[ISO] Extracted vmlinuz ({os.path.getsize(vmlinuz_dst)} bytes) from ESP path {vpath}")
+
+                # If kernel not found on ESP, extract from ROOT partition via debugfs
+                if not kernel_ready and len(partitions_info) > 1:
+                    log_to_task(build_id, "[ISO] Kernel not on ESP, extracting from root partition via debugfs...")
+                    debugfs_bin = shutil.which("debugfs")
+                    root_part = partitions_info[1]  # Second partition is root
+                    root_img = os.path.join(ws_path, "root_part.img")
+                    try:
+                        subprocess.run([
+                            "dd", f"if={target_raw}", f"of={root_img}",
+                            "bs=512", f"skip={root_part['start']}", f"count={root_part['size']}",
+                            "status=none"
+                        ], check=True)
+
+                        if debugfs_bin and os.path.exists(root_img):
+                            # List /boot/ to find kernel version
+                            ls_res = subprocess.run([debugfs_bin, "-R", "ls -l boot", root_img], capture_output=True, text=True)
+                            if ls_res.returncode == 0:
+                                log_to_task(build_id, f"[ISO] Root /boot/ listing: {ls_res.stdout[:300]}")
+
+                            # Find vmlinuz filename
+                            vmlinuz_name = None
+                            initrd_name = None
+                            for fname_line in ls_res.stdout.splitlines():
+                                parts = fname_line.split()
+                                if parts:
+                                    fname = parts[-1] if len(parts) > 1 else parts[0]
+                                    if fname.startswith("vmlinuz"):
+                                        vmlinuz_name = fname
+                                    if fname.startswith("initrd.img") or fname.startswith("initrd-"):
+                                        initrd_name = fname
+
+                            vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
+                            initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
+
+                            if vmlinuz_name:
+                                subprocess.run([debugfs_bin, "-R", f"dump boot/{vmlinuz_name} {vmlinuz_dst}", root_img], capture_output=True)
+                                if os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0:
+                                    log_to_task(build_id, f"[ISO] Extracted {vmlinuz_name} ({os.path.getsize(vmlinuz_dst)} bytes) from root partition")
+                                    if initrd_name:
+                                        subprocess.run([debugfs_bin, "-R", f"dump boot/{initrd_name} {initrd_dst}", root_img], capture_output=True)
+                                        if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
+                                            log_to_task(build_id, f"[ISO] Extracted {initrd_name} ({os.path.getsize(initrd_dst)} bytes) from root partition")
+                                    kernel_ready = True
+                    except Exception as e_root:
+                        log_to_task(build_id, f"[ISO WARNING] Root partition extraction failed: {e_root}")
+                    finally:
+                        if os.path.exists(root_img):
+                            os.remove(root_img)
+
             except Exception as e:
-                log_to_task(build_id, f"[ISO WARNING] ESP extraction failed: {e}")
+                log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
             # Step 2: Write grub.cfg for ISO boot
             grub_cfg_path = os.path.join(iso_grub_dir, "grub.cfg")

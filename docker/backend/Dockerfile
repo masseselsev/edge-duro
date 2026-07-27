@@ -2,7 +2,7 @@ FROM python:3.13-slim
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc libpq-dev curl \
     mkosi systemd-container debootstrap \
-    xorriso squashfs-tools mtools dosfstools \
+    xorriso squashfs-tools mtools dosfstools e2fsprogs \
     grub-efi-amd64-bin grub-pc-bin grub-common \
     ubuntu-keyring debian-archive-keyring \
     && rm -rf /var/lib/apt/lists/*

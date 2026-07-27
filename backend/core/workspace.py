@@ -308,7 +308,7 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
   umount "$ROOT/sys" 2>/dev/null || true
   umount -l "$ROOT/dev" 2>/dev/null || true
 
-  rm -rf "$ROOT/opt/edge_packages"ges"
+  rm -rf "$ROOT/opt/edge_packages"
 fi
 
 # 2. Run recipe post-install hooks (timezone, hostname MAC, custom scripts)

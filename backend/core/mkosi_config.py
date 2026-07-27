@@ -10,6 +10,13 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
     if "systemd-boot" not in pkgs:
         pkgs.append("systemd-boot")
+
+    distro = (recipe.distribution or "debian").lower()
+    if "debian" in distro and not any("linux-image" in p.lower() for p in pkgs):
+        pkgs.append("linux-image-amd64")
+    elif "ubuntu" in distro and not any("linux-image" in p.lower() for p in pkgs):
+        pkgs.append("linux-image-generic")
+
     # Standard distribution packages only for mkosi base build (Edge packages are pre-downloaded and installed via dpkg)
     std_pkgs = [p for p in pkgs if not p.lower().startswith("edge-")]
     packages_formatted = "\n    ".join(std_pkgs)
@@ -53,7 +60,6 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "/var/lib/apt/lists/*",
     ]
 
-    distro = (recipe.distribution or "debian").lower()
     if "debian" in distro:
         mkosi_distro = "debian"
         components = "main contrib non-free non-free-firmware"
@@ -128,9 +134,11 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "[Output]",
         f"ImageId={recipe.name.lower().replace(' ', '_')}",
         "Format=disk",
+        "Bootable=yes",
         "OutputDirectory=output",
         "",
         "[Content]",
+        "Bootloader=systemd-boot",
         "WithRecommends=no",
         f"Packages=\n    {packages_formatted}",
     ]

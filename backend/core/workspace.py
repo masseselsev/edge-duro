@@ -243,7 +243,12 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
   chroot "$ROOT" /bin/bash -c "
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
     ln -sf /bin/bash /bin/sh
-    mkdir -p /opt/edge/bin /usr/bin
+    mkdir -p /opt/edge/venv/bin /opt/edge/bin /usr/bin
+    if [ ! -f /opt/edge/venv/bin/python3.14 ]; then
+      ln -sf /usr/bin/python3 /opt/edge/venv/bin/python3.14 2>/dev/null || true
+      ln -sf /usr/bin/python3 /opt/edge/venv/bin/python3 2>/dev/null || true
+      ln -sf /usr/bin/python3 /opt/edge/venv/bin/python 2>/dev/null || true
+    fi
 
     if ! command -v apt-mark >/dev/null 2>&1; then
       echo '#!/bin/bash' > /usr/bin/apt-mark
@@ -265,8 +270,10 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
       sed -i 's/\[\[/\[/g; s/\]\]/\]/g' /opt/edge/share/etc/environment.d/02-autosdk.sh 2>/dev/null || true
     fi
 
-    # Ensure ctrl-cli remains executable after package unpack
-    chmod +x /opt/edge/bin/ctrl-cli 2>/dev/null || true
+    # Neutralize failing ctrl-cli calls in edge-base postinst script during build phase
+    if [ -f /var/lib/dpkg/info/edge-base.postinst ]; then
+      sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' /var/lib/dpkg/info/edge-base.postinst 2>/dev/null || true
+    fi
 
     dpkg --configure -a || true
   "

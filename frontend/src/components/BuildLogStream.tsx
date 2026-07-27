@@ -39,7 +39,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     if (logContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
       const atBottom = scrollHeight - (scrollTop + clientHeight) < 60;
-      setIsAtBottom(atBottom);
+      setIsAtBottom((prev) => (prev !== atBottom ? atBottom : prev));
     }
   };
 
@@ -236,6 +236,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
             displayLogs.map((line, i) => (
               <div
                 key={i}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 20px' }}
                 className={
                   line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
                   line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :

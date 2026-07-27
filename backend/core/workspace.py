@@ -264,10 +264,18 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
     bootctl install --no-variables 2>/dev/null || true
     KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -n1)
-    if [ -n "$KVER" ]; then
-      cp -f "/boot/vmlinuz-$KVER" /boot/vmlinuz 2>/dev/null || cp -f /vmlinuz /boot/vmlinuz 2>/dev/null || true
-      cp -f "/boot/initrd.img-$KVER" /boot/initrd.img 2>/dev/null || cp -f /initrd.img /boot/initrd.img 2>/dev/null || true
-    fi
+    for f in /boot/vmlinuz-$KVER /boot/vmlinuz* /vmlinuz*; do
+      if [ -f "$f" ] && [ "$f" != "/boot/vmlinuz" ]; then
+        cp -f "$f" /boot/vmlinuz 2>/dev/null || true
+        break
+      fi
+    done
+    for f in /boot/initrd.img-$KVER /boot/initrd* /boot/initramfs* /initrd* /initramfs*; do
+      if [ -f "$f" ] && [ "$f" != "/boot/initrd.img" ]; then
+        cp -f "$f" /boot/initrd.img 2>/dev/null || true
+        break
+      fi
+    done
     mkdir -p /boot/loader/entries
     echo "default edge.conf" > /boot/loader/loader.conf
     echo "timeout 3" >> /boot/loader/loader.conf

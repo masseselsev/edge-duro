@@ -204,6 +204,22 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                     log_to_task(build_id, f"[ISO] Extracted initrd.img ({os.path.getsize(initrd_dst)} bytes) from ESP path {ipath}")
                                     break
 
+                            # If initrd is still missing, try extracting .initrd section from UKI (.efi) on ESP
+                            if not (os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0):
+                                objcopy_bin = shutil.which("objcopy")
+                                uki_dst = os.path.join(ws_path, "uki_temp.efi")
+                                subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, "::EFI/Linux/*.efi", uki_dst], capture_output=True, text=True)
+                                if os.path.exists(uki_dst) and os.path.getsize(uki_dst) > 0 and objcopy_bin:
+                                    log_to_task(build_id, f"[ISO] Found UKI image on ESP ({os.path.getsize(uki_dst)} bytes). Extracting .initrd section via objcopy...")
+                                    subprocess.run([objcopy_bin, "-O", "binary", "--only-section=.initrd", uki_dst, initrd_dst], capture_output=True)
+                                    if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
+                                        log_to_task(build_id, f"[ISO SUCCESS] Extracted initrd.img ({os.path.getsize(initrd_dst)} bytes) from UKI binary section!")
+                                if os.path.exists(uki_dst):
+                                    try:
+                                        os.remove(uki_dst)
+                                    except Exception:
+                                        pass
+
                 # Check if we have both vmlinuz and initrd.img from ESP
                 vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
                 initrd_dst = os.path.join(iso_boot_dir, "initrd.img")

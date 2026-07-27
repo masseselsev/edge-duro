@@ -242,18 +242,32 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
   echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
   chroot "$ROOT" /bin/bash -c "
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
+    ln -sf /bin/bash /bin/sh
     mkdir -p /opt/edge/bin /usr/bin
+
     if ! command -v apt-mark >/dev/null 2>&1; then
-      echo '#!/bin/sh' > /usr/bin/apt-mark
+      echo '#!/bin/bash' > /usr/bin/apt-mark
       echo 'exit 0' >> /usr/bin/apt-mark
       chmod +x /usr/bin/apt-mark
     fi
-    if [ ! -f /opt/edge/bin/ctrl-cli ]; then
-      echo '#!/bin/sh' > /opt/edge/bin/ctrl-cli
+
+    if [ ! -f /opt/edge/bin/ctrl-cli ] || [ ! -x /opt/edge/bin/ctrl-cli ]; then
+      echo '#!/bin/bash' > /opt/edge/bin/ctrl-cli
       echo 'exit 0' >> /opt/edge/bin/ctrl-cli
       chmod +x /opt/edge/bin/ctrl-cli
     fi
+
+    # Unpack deb packages
     dpkg -i --force-depends --force-overwrite /opt/edge_packages/*.deb || true
+
+    # Fix bash double bracket syntax in autosdk script if present
+    if [ -f /opt/edge/share/etc/environment.d/02-autosdk.sh ]; then
+      sed -i 's/\[\[/\[/g; s/\]\]/\]/g' /opt/edge/share/etc/environment.d/02-autosdk.sh 2>/dev/null || true
+    fi
+
+    # Ensure ctrl-cli remains executable after package unpack
+    chmod +x /opt/edge/bin/ctrl-cli 2>/dev/null || true
+
     dpkg --configure -a || true
   "
   rm -rf "$ROOT/opt/edge_packages"

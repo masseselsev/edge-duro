@@ -291,7 +291,9 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
     echo 'exit 0' >> /opt/edge/bin/ctrl-cli
     chmod +x /opt/edge/bin/ctrl-cli
 
-    # 6. Configure all unpacked packages
+    # 6. Fetch missing dependencies and configure all unpacked packages
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -f -y --allow-insecure-repositories --allow-unauthenticated || true
     dpkg --configure --pending --force-depends || true
   "
   rm -rf "$ROOT/opt/edge_packages"

@@ -49,10 +49,11 @@ services:
       dockerfile: ../docker/backend/Dockerfile
     restart: always
     privileged: true
-    command: celery -A tasks.celery_app worker --loglevel=info
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:securepassword@db:5432/duro_image_builder}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-2}
       PYTHONPATH: /app
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-q1w2e3r4}

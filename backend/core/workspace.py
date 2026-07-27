@@ -146,15 +146,19 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     release_apt_cache = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "cache", f"apt_{rel_clean}")
     os.makedirs(release_apt_cache, exist_ok=True)
 
-    for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
-        apt_conf_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "apt.conf.d")
-        os.makedirs(apt_conf_dir, exist_ok=True)
-        with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
-            f.write(f'Dir::Cache::Archives "{release_apt_cache}";\n')
-            f.write('APT::Acquire::Retries "5";\n')
-            f.write('DPkg::Lock::Timeout "60";\n')
-            f.write('APT::Install-Recommends "0";\n')
-            f.write('APT::Install-Suggests "0";\n')
+    # Pre-seed rootfs APT cache directory from persistent host cache
+    extra_apt_archives = os.path.join(workspace_path, "mkosi.extra", "var", "cache", "apt", "archives")
+    os.makedirs(extra_apt_archives, exist_ok=True)
+    if os.path.exists(release_apt_cache):
+        for cached_file in os.listdir(release_apt_cache):
+            if cached_file.endswith(".deb"):
+                src_p = os.path.join(release_apt_cache, cached_file)
+                dst_p = os.path.join(extra_apt_archives, cached_file)
+                if not os.path.exists(dst_p):
+                    try:
+                        shutil.copy2(src_p, dst_p)
+                    except Exception:
+                        pass
 
     # 3.5. Prepare script — runs on HOST before package installation (mkosi v14)
     # Uses $BUILDROOT to access the rootfs. Writes custom repos and runs apt-get update

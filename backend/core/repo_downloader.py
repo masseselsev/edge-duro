@@ -114,11 +114,28 @@ def download_edge_packages(recipe, workspace_path: str) -> List[str]:
         deb_filename = os.path.basename(deb_url)
         dest_file = os.path.join(dest_dir, deb_filename)
 
+        # Persistent host cache directory for Edge deb packages
+        global_cache_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "cache", "deb_cache")
+        os.makedirs(global_cache_dir, exist_ok=True)
+        cached_deb = os.path.join(global_cache_dir, deb_filename)
+
+        if os.path.exists(cached_deb) and os.path.getsize(cached_deb) > 0:
+            print(f"[REPO DOWNLOADER CACHE HIT] Using cached {deb_filename} from {cached_deb}")
+            import shutil
+            shutil.copy2(cached_deb, dest_file)
+            downloaded_files.append(dest_file)
+            continue
+
         print(f"[REPO DOWNLOADER] Downloading {pkg_name} from {deb_url} -> {dest_file}...")
         try:
             req = urllib.request.Request(deb_url, headers={"User-Agent": "edge-duro-builder"})
             with urllib.request.urlopen(req, timeout=60) as resp, open(dest_file, "wb") as out_f:
                 out_f.write(resp.read())
+            
+            # Save copy to persistent host deb cache
+            import shutil
+            shutil.copy2(dest_file, cached_deb)
+
             downloaded_files.append(dest_file)
             print(f"[REPO DOWNLOADER SUCCESS] Downloaded {deb_filename} ({os.path.getsize(dest_file)} bytes)")
         except Exception as e:

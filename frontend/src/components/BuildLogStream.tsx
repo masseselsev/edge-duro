@@ -32,7 +32,30 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const [hasIso, setHasIso] = useState<boolean>(false);
   const [hasRaw, setHasRaw] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    if (logContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+      const atBottom = scrollHeight - (scrollTop + clientHeight) < 60;
+      setIsAtBottom(atBottom);
+    }
+  };
+
+  useEffect(() => {
+    if (isAtBottom && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, isAtBottom]);
+
+  const scrollToBottom = () => {
+    setIsAtBottom(true);
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  };
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -186,7 +209,11 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
         </div>
 
         {/* Monospace Log Viewer */}
-        <div className="flex-1 p-5 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1 bg-zinc-950 leading-relaxed">
+        <div
+          ref={logContainerRef}
+          onScroll={handleScroll}
+          className="relative flex-1 p-5 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1 bg-zinc-950 leading-relaxed"
+        >
           {logs.length === 0 ? (
             <div className="text-zinc-600 italic">Waiting for live build output stream...</div>
           ) : (
@@ -226,6 +253,17 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
             })()
           )}
           <div ref={logEndRef} />
+
+          {/* Floating Jump to Bottom Button */}
+          {!isAtBottom && (
+            <button
+              onClick={scrollToBottom}
+              className="sticky bottom-4 right-4 ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-zinc-950 font-sans font-bold text-xs shadow-lg hover:bg-amber-400 transition-all cursor-pointer z-10"
+            >
+              <ArrowDown size={14} />
+              <span>Scroll to Bottom</span>
+            </button>
+          )}
         </div>
       </div>
     </div>,

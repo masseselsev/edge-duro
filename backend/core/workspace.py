@@ -306,6 +306,7 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 6. Fetch missing dependencies and configure all unpacked packages
     export DEBIAN_FRONTEND=noninteractive
+    rm -f /etc/apt/apt.conf.d/*mkosi* /etc/apt/apt.conf.d/*cache* 2>/dev/null || true
     mkdir -p /var/cache/apt/archives/partial /var/lib/apt/lists/partial
     apt-get update --allow-insecure-repositories || true
     apt-get install -f -y --allow-unauthenticated || true

@@ -155,21 +155,50 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                     log_to_task(build_id, f"[ISO] Extracted EFI System Partition image ({os.path.getsize(efi_img_path)} bytes)")
                                     
                                     # Copy /EFI directory tree into iso_staging/EFI for VirtualBox UEFI discovery
-                                    mnt_dir = os.path.join(ws_path, "mnt_efi")
-                                    os.makedirs(mnt_dir, exist_ok=True)
-                                    try:
-                                        subprocess.run(["mount", "-o", "loop,ro", efi_img_path, mnt_dir], check=True, capture_output=True)
-                                        if os.path.exists(os.path.join(mnt_dir, "EFI")):
-                                            shutil.copytree(os.path.join(mnt_dir, "EFI"), os.path.join(iso_staging, "EFI"), dirs_exist_ok=True)
-                                            log_to_task(build_id, "[ISO] Copied /EFI directory tree into ISO filesystem root for VirtualBox UEFI compatibility")
-                                        subprocess.run(["umount", mnt_dir], check=True, capture_output=True)
-                                    except Exception as err:
-                                        log_to_task(build_id, f"[ISO WARNING] Loop mount EFI extraction: {err}")
-                                    finally:
-                                        if os.path.exists(mnt_dir):
+                                    mcopy_bin = shutil.which("mcopy")
+                                    extracted_efi_tree = False
+                                    if mcopy_bin:
+                                        try:
+                                            res_mc = subprocess.run([mcopy_bin, "-s", "-i", efi_img_path, "::EFI", iso_staging], capture_output=True, text=True)
+                                            if res_mc.returncode == 0 and os.path.exists(os.path.join(iso_staging, "EFI")):
+                                                extracted_efi_tree = True
+                                                log_to_task(build_id, "[ISO] Extracted /EFI directory tree using mcopy user-space driver")
+                                        except Exception as e_mc:
+                                            log_to_task(build_id, f"[ISO WARNING] mcopy extraction failed: {e_mc}")
+
+                                    if not extracted_efi_tree:
+                                        mnt_dir = os.path.join(ws_path, "mnt_efi")
+                                        os.makedirs(mnt_dir, exist_ok=True)
+                                        try:
+                                            subprocess.run(["mount", "-o", "loop,ro", efi_img_path, mnt_dir], check=True, capture_output=True)
+                                            if os.path.exists(os.path.join(mnt_dir, "EFI")):
+                                                shutil.copytree(os.path.join(mnt_dir, "EFI"), os.path.join(iso_staging, "EFI"), dirs_exist_ok=True)
+                                                extracted_efi_tree = True
+                                                log_to_task(build_id, "[ISO] Copied /EFI directory tree into ISO filesystem root via loop mount")
+                                            subprocess.run(["umount", mnt_dir], check=True, capture_output=True)
+                                        except Exception as err:
+                                            log_to_task(build_id, f"[ISO WARNING] Loop mount EFI extraction: {err}")
+                                        finally:
+                                            if os.path.exists(mnt_dir):
+                                                try:
+                                                    subprocess.run(["umount", "-l", mnt_dir], capture_output=True)
+                                                    os.rmdir(mnt_dir)
+                                                except Exception:
+                                                    pass
+
+                                    # Ensure both uppercase BOOTX64.EFI and lowercase bootx64.efi exist
+                                    efi_boot_dir = os.path.join(iso_staging, "EFI", "BOOT")
+                                    if os.path.exists(efi_boot_dir):
+                                        b64_upper = os.path.join(efi_boot_dir, "BOOTX64.EFI")
+                                        b64_lower = os.path.join(efi_boot_dir, "bootx64.efi")
+                                        if os.path.exists(b64_upper) and not os.path.exists(b64_lower):
                                             try:
-                                                subprocess.run(["umount", "-l", mnt_dir], capture_output=True)
-                                                os.rmdir(mnt_dir)
+                                                shutil.copy2(b64_upper, b64_lower)
+                                            except Exception:
+                                                pass
+                                        elif os.path.exists(b64_lower) and not os.path.exists(b64_upper):
+                                            try:
+                                                shutil.copy2(b64_lower, b64_upper)
                                             except Exception:
                                                 pass
                                     break
@@ -182,10 +211,11 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             elif target_raw:
                 # Fallback: Compress target_raw on the fly if xz artifact is unavailable
                 raw_xz_staged = os.path.join(iso_staging, f"{os.path.splitext(os.path.basename(target_raw))[0]}.raw.xz")
-                cpu_threads = max(1, (os.cpu_count() or 2) // 2)
+                conc = int(os.getenv("CELERY_WORKER_CONCURRENCY", "2"))
+                cpu_threads = max(1, (os.cpu_count() or 2) // max(1, conc))
                 try:
                     with open(raw_xz_staged, "wb") as out_f:
-                        subprocess.run(["nice", "-n", "19", "xz", "-c", "-3", f"-T{cpu_threads}", target_raw], stdout=out_f, check=True)
+                        subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "xz", "-c", "-3", f"-T{cpu_threads}", target_raw], stdout=out_f, check=True)
                 except Exception:
                     shutil.copy2(target_raw, os.path.join(iso_staging, os.path.basename(target_raw)))
 
@@ -194,9 +224,8 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                 cmd = [
                     "xorriso", "-as", "mkisofs",
                     "-r", "-J",
+                    "-iso-level", "3",
                     "-V", "DURO_BOOT",
-                    "-partition_offset", "16",
-                    "-eltorito-alt-boot",
                     "-e", "efi.img",
                     "-no-emul-boot",
                     "-isohybrid-gpt-basdat",

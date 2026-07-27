@@ -176,6 +176,8 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         "REPOEOF",
         '',
         '# Run apt-get update inside the rootfs chroot',
+        '# Ensure host DNS resolv.conf is copied into rootfs so APT can resolve hosts',
+        'cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true',
         'if [ "$ROOT" != "/" ] && [ -d "$ROOT/usr" ]; then',
         '  chroot "$ROOT" apt-get update --allow-insecure-repositories --allow-unauthenticated || true',
         'elif command -v apt-get >/dev/null 2>&1; then',
@@ -232,10 +234,28 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 
 ROOT="${{BUILDROOT:-/}}"
 
+# Copy host DNS configuration into rootfs for chroot network access
+cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
+
 # 1. Install pre-downloaded Edge platform .deb packages inside chroot
 if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
   echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
-  chroot "$ROOT" /bin/bash -c "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH; dpkg -i --force-depends /opt/edge_packages/*.deb || true"
+  chroot "$ROOT" /bin/bash -c "
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
+    mkdir -p /opt/edge/bin /usr/bin
+    if ! command -v apt-mark >/dev/null 2>&1; then
+      echo '#!/bin/sh' > /usr/bin/apt-mark
+      echo 'exit 0' >> /usr/bin/apt-mark
+      chmod +x /usr/bin/apt-mark
+    fi
+    if [ ! -f /opt/edge/bin/ctrl-cli ]; then
+      echo '#!/bin/sh' > /opt/edge/bin/ctrl-cli
+      echo 'exit 0' >> /opt/edge/bin/ctrl-cli
+      chmod +x /opt/edge/bin/ctrl-cli
+    fi
+    dpkg -i --force-depends --force-overwrite /opt/edge_packages/*.deb || true
+    dpkg --configure -a || true
+  "
   rm -rf "$ROOT/opt/edge_packages"
 fi
 

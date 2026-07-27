@@ -141,12 +141,18 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
 
-    # 3.4. Persistent APT Package Cache configuration
+    # 3.4. Release-Isolated Persistent APT Package Cache configuration
+    rel_clean = (recipe.release if recipe and recipe.release else "default").lower().replace(" ", "_")
+    release_apt_cache = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "cache", f"apt_{rel_clean}")
+    os.makedirs(release_apt_cache, exist_ok=True)
+
     for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
         apt_conf_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "apt.conf.d")
         os.makedirs(apt_conf_dir, exist_ok=True)
         with open(os.path.join(apt_conf_dir, "99duro-cache"), "w") as f:
-            f.write('Dir::Cache::Archives "/opt/data/duro_workspace/cache/apt";\n')
+            f.write(f'Dir::Cache::Archives "{release_apt_cache}";\n')
+            f.write('APT::Acquire::Retries "5";\n')
+            f.write('DPkg::Lock::Timeout "60";\n')
 
     # 3.5. Prepare script — runs on HOST before package installation (mkosi v14)
     # Uses $BUILDROOT to access the rootfs. Writes custom repos and runs apt-get update

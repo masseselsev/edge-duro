@@ -226,12 +226,13 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             if xorriso_bin and esp_extracted:
                 cmd = [
                     "xorriso", "-as", "mkisofs",
-                    "-r", "-J",
-                    "-iso-level", "3",
+                    "-r", "-J", "-joliet-long",
                     "-V", "DURO_BOOT",
-                    "-e", "efi.img",
+                    "-append_partition", "2", "0xef", efi_img_path,
+                    "-appended_part_as_gpt",
+                    "-eltorito-alt-boot",
+                    "-e", "--interval:appended_partition_2:all::",
                     "-no-emul-boot",
-                    "-isohybrid-gpt-basdat",
                     "-o", final_iso_path,
                     iso_staging
                 ]

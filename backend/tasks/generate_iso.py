@@ -183,32 +183,36 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 esp_files = [l.strip() for l in mdir_res.stdout.splitlines() if l.strip() and "::" in l]
                                 log_to_task(build_id, f"[ISO] ESP contents ({len(esp_files)} entries): {'; '.join(esp_files[:20])}")
 
-                        # Try extracting kernel: check multiple possible paths
+                        # Try extracting vmlinuz and initrd from ESP
                         if mcopy_bin:
                             vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
                             initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
 
-                            # Try direct paths first
+                            # Extract vmlinuz
                             vmlinuz_paths = ["::vmlinuz", "::vmlinuz-*"]
-                            initrd_paths = ["::initrd.img", "::initrd.img-*"]
-
-                            # Try each vmlinuz path
                             for vpath in vmlinuz_paths:
-                                if kernel_ready:
-                                    break
-                                r = subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, vpath, vmlinuz_dst], capture_output=True, text=True)
+                                subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, vpath, vmlinuz_dst], capture_output=True, text=True)
                                 if os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0:
-                                    # Also get initrd
-                                    for ipath in initrd_paths:
-                                        subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, ipath, initrd_dst], capture_output=True, text=True)
-                                        if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
-                                            break
-                                    kernel_ready = True
                                     log_to_task(build_id, f"[ISO] Extracted vmlinuz ({os.path.getsize(vmlinuz_dst)} bytes) from ESP path {vpath}")
+                                    break
 
-                # If kernel not found on ESP, extract from ROOT partition via debugfs
-                if not kernel_ready and len(partitions_info) > 1:
-                    log_to_task(build_id, "[ISO] Kernel not on ESP, extracting from root partition via debugfs...")
+                            # Extract initrd
+                            initrd_paths = ["::initrd.img", "::initrd.img-*", "::initrd*", "::*.initrd"]
+                            for ipath in initrd_paths:
+                                subprocess.run([mcopy_bin, "-n", "-i", efi_img_path, ipath, initrd_dst], capture_output=True, text=True)
+                                if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
+                                    log_to_task(build_id, f"[ISO] Extracted initrd.img ({os.path.getsize(initrd_dst)} bytes) from ESP path {ipath}")
+                                    break
+
+                # Check if we have both vmlinuz and initrd.img from ESP
+                vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
+                initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
+                has_vmlinuz = os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0
+                has_initrd = os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0
+
+                # If either is missing, extract missing files from ROOT partition via debugfs
+                if (not has_vmlinuz or not has_initrd) and len(partitions_info) > 1:
+                    log_to_task(build_id, f"[ISO] Missing boot files (vmlinuz={has_vmlinuz}, initrd={has_initrd}), extracting from root partition via debugfs...")
                     debugfs_bin = shutil.which("debugfs")
                     root_part = partitions_info[1]  # Second partition is root
                     root_img = os.path.join(ws_path, "root_part.img")
@@ -220,40 +224,44 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                         ], check=True)
 
                         if debugfs_bin and os.path.exists(root_img):
-                            # List /boot/ to find kernel version
                             ls_res = subprocess.run([debugfs_bin, "-R", "ls -l boot", root_img], capture_output=True, text=True)
                             if ls_res.returncode == 0:
-                                log_to_task(build_id, f"[ISO] Root /boot/ listing: {ls_res.stdout[:300]}")
+                                log_to_task(build_id, f"[ISO] Root /boot/ listing: {ls_res.stdout[:400]}")
 
-                            # Find vmlinuz filename
-                            vmlinuz_name = None
-                            initrd_name = None
-                            for fname_line in ls_res.stdout.splitlines():
-                                parts = fname_line.split()
-                                if parts:
-                                    fname = parts[-1] if len(parts) > 1 else parts[0]
-                                    if fname.startswith("vmlinuz"):
-                                        vmlinuz_name = fname
-                                    if fname.startswith("initrd.img") or fname.startswith("initrd-"):
-                                        initrd_name = fname
+                                # Parse boot directory to find vmlinuz and initrd files
+                                v_candidates = []
+                                i_candidates = []
+                                for fname_line in ls_res.stdout.splitlines():
+                                    parts = fname_line.split()
+                                    if len(parts) >= 2:
+                                        fname = parts[-1]
+                                        if fname.startswith("vmlinuz"):
+                                            v_candidates.append(fname)
+                                        if fname.startswith("initrd") or fname.startswith("initramfs"):
+                                            i_candidates.append(fname)
 
-                            vmlinuz_dst = os.path.join(iso_boot_dir, "vmlinuz")
-                            initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
+                                # Dump missing vmlinuz
+                                if not has_vmlinuz and v_candidates:
+                                    v_name = v_candidates[0]
+                                    subprocess.run([debugfs_bin, "-R", f"dump boot/{v_name} {vmlinuz_dst}", root_img], capture_output=True)
+                                    has_vmlinuz = os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0
+                                    if has_vmlinuz:
+                                        log_to_task(build_id, f"[ISO] Extracted {v_name} ({os.path.getsize(vmlinuz_dst)} bytes) from root partition")
 
-                            if vmlinuz_name:
-                                subprocess.run([debugfs_bin, "-R", f"dump boot/{vmlinuz_name} {vmlinuz_dst}", root_img], capture_output=True)
-                                if os.path.exists(vmlinuz_dst) and os.path.getsize(vmlinuz_dst) > 0:
-                                    log_to_task(build_id, f"[ISO] Extracted {vmlinuz_name} ({os.path.getsize(vmlinuz_dst)} bytes) from root partition")
-                                    if initrd_name:
-                                        subprocess.run([debugfs_bin, "-R", f"dump boot/{initrd_name} {initrd_dst}", root_img], capture_output=True)
-                                        if os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0:
-                                            log_to_task(build_id, f"[ISO] Extracted {initrd_name} ({os.path.getsize(initrd_dst)} bytes) from root partition")
-                                    kernel_ready = True
+                                # Dump missing initrd
+                                if not has_initrd and i_candidates:
+                                    i_name = i_candidates[0]
+                                    subprocess.run([debugfs_bin, "-R", f"dump boot/{i_name} {initrd_dst}", root_img], capture_output=True)
+                                    has_initrd = os.path.exists(initrd_dst) and os.path.getsize(initrd_dst) > 0
+                                    if has_initrd:
+                                        log_to_task(build_id, f"[ISO] Extracted {i_name} ({os.path.getsize(initrd_dst)} bytes) from root partition")
                     except Exception as e_root:
                         log_to_task(build_id, f"[ISO WARNING] Root partition extraction failed: {e_root}")
                     finally:
                         if os.path.exists(root_img):
                             os.remove(root_img)
+
+                kernel_ready = has_vmlinuz and has_initrd
 
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")

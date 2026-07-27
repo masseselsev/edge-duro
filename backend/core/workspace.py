@@ -183,9 +183,9 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         '# Ensure host DNS resolv.conf is copied into rootfs so APT can resolve hosts',
         'cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true',
         'if [ "$ROOT" != "/" ] && [ -d "$ROOT/usr" ]; then',
-        '  chroot "$ROOT" apt-get update --allow-insecure-repositories --allow-unauthenticated || true',
+        '  chroot "$ROOT" apt-get update --allow-insecure-repositories || true',
         'elif command -v apt-get >/dev/null 2>&1; then',
-        '  apt-get update --allow-insecure-repositories --allow-unauthenticated || true',
+        '  apt-get update --allow-insecure-repositories || true',
         'fi',
     ])
 
@@ -298,8 +298,8 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 6. Fetch missing dependencies and configure all unpacked packages
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update --allow-insecure-repositories --allow-unauthenticated || true
-    apt-get install -f -y --allow-insecure-repositories --allow-unauthenticated || true
+    apt-get update --allow-insecure-repositories || true
+    apt-get install -f -y --allow-unauthenticated || true
     dpkg --configure --pending --force-depends || true
   "
 

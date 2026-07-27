@@ -16,7 +16,7 @@ interface PartitionEditorProps {
 }
 
 export const DEFAULT_EDGE_BOX_PARTITIONS: Partition[] = [
-  { mountpoint: '/boot', size: '512M', filesystem: 'vfat', type: 'esp', label: 'ESP' },
+  { mountpoint: '/boot', size: '512M', filesystem: 'vfat', type: 'esp', label: 'edgeboot' },
   { mountpoint: '/', size: '8G', filesystem: 'ext4', type: 'root', label: 'edgeroot' },
   { mountpoint: '/var/log/edge', size: '1G', filesystem: 'ext4', type: 'generic', label: 'edgelog' },
   { mountpoint: '/var/opt/edge', size: 'max', filesystem: 'ext4', type: 'generic', label: 'edgestor' },

@@ -40,7 +40,7 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
     os.makedirs(repart_dir, exist_ok=True)
 
     partitions = (recipe.partitions if (recipe and recipe.partitions) else None) or [
-        {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "ESP"},
+        {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},
         {"mountpoint": "/", "size": "8G", "filesystem": "ext4", "type": "root", "label": "edgeroot"},
         {"mountpoint": "/var/log/edge", "size": "1G", "filesystem": "ext4", "type": "generic", "label": "edgelog"},
         {"mountpoint": "/var/opt/edge", "size": "max", "filesystem": "ext4", "type": "generic", "label": "edgestor"},

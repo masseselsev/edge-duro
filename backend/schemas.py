@@ -109,7 +109,12 @@ class RecipeBase(BaseModel):
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
-    partitions: List[PartitionSchema] = Field(default_factory=list)
+    partitions: List[PartitionSchema] = Field(default_factory=lambda: [
+        {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},
+        {"mountpoint": "/", "size": "8G", "filesystem": "ext4", "type": "root", "label": "edgeroot"},
+        {"mountpoint": "/var/log/edge", "size": "1G", "filesystem": "ext4", "type": "generic", "label": "edgelog"},
+        {"mountpoint": "/var/opt/edge", "size": "max", "filesystem": "ext4", "type": "generic", "label": "edgestor"},
+    ])
     raw_mkosi_conf: Optional[str] = None
     raw_preseed_cfg: Optional[str] = None
     raw_postinst: Optional[str] = None

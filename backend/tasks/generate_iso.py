@@ -137,7 +137,8 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                 sf_res = subprocess.run(["sfdisk", "-d", target_raw], capture_output=True, text=True)
                 if sf_res.returncode == 0:
                     for line in sf_res.stdout.splitlines():
-                        if "start=" in line and ("size=" in line or "type=" in line):
+                        line_lower = line.lower()
+                        if "start=" in line_lower and ("size=" in line_lower or "type=" in line_lower):
                             start_match = re.search(r'start=\s*(\d+)', line)
                             size_match = re.search(r'size=\s*(\d+)', line)
                             if start_match and size_match:
@@ -152,6 +153,25 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 esp_extracted = os.path.exists(efi_img_path) and os.path.getsize(efi_img_path) > 0
                                 if esp_extracted:
                                     log_to_task(build_id, f"[ISO] Extracted EFI System Partition image ({os.path.getsize(efi_img_path)} bytes)")
+                                    
+                                    # Copy /EFI directory tree into iso_staging/EFI for VirtualBox UEFI discovery
+                                    mnt_dir = os.path.join(ws_path, "mnt_efi")
+                                    os.makedirs(mnt_dir, exist_ok=True)
+                                    try:
+                                        subprocess.run(["mount", "-o", "loop,ro", efi_img_path, mnt_dir], check=True, capture_output=True)
+                                        if os.path.exists(os.path.join(mnt_dir, "EFI")):
+                                            shutil.copytree(os.path.join(mnt_dir, "EFI"), os.path.join(iso_staging, "EFI"), dirs_exist_ok=True)
+                                            log_to_task(build_id, "[ISO] Copied /EFI directory tree into ISO filesystem root for VirtualBox UEFI compatibility")
+                                        subprocess.run(["umount", mnt_dir], check=True, capture_output=True)
+                                    except Exception as err:
+                                        log_to_task(build_id, f"[ISO WARNING] Loop mount EFI extraction: {err}")
+                                    finally:
+                                        if os.path.exists(mnt_dir):
+                                            try:
+                                                subprocess.run(["umount", "-l", mnt_dir], capture_output=True)
+                                                os.rmdir(mnt_dir)
+                                            except Exception:
+                                                pass
                                     break
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] ESP partition extraction failed: {e}")

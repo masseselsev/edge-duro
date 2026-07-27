@@ -86,7 +86,15 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
         with open(conf_path, "w") as f:
             f.write("\n".join(lines) + "\n")
 
-    os.makedirs(os.path.join(base_dir, "cache", "apt"), exist_ok=True)
+    rel = (recipe.release if recipe else "bookworm") or "bookworm"
+    cache_base = os.path.join(base_dir, "cache")
+    os.makedirs(os.path.join(cache_base, "apt", "partial"), exist_ok=True)
+    os.makedirs(os.path.join(cache_base, f"apt_{rel}", "partial"), exist_ok=True)
+    if os.path.exists(cache_base):
+        for item in os.listdir(cache_base):
+            if item.startswith("apt"):
+                os.makedirs(os.path.join(cache_base, item, "partial"), exist_ok=True)
+
     return recipe_ws
 
 

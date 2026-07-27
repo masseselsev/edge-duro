@@ -36,19 +36,35 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = () => {
-    if (logContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
-      const atBottom = scrollHeight - (scrollTop + clientHeight) < 60;
-      setIsAtBottom(atBottom);
+  const displayLogs = React.useMemo(() => {
+    if (logs.length === 0) return [];
+    const isProgressLine = (str: string): boolean => {
+      const clean = str.replace(/^\[.*?\]\s*/, '').trim();
+      if (!clean) return false;
+      return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(clean) ||
+             /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(clean);
+    };
+
+    const result: string[] = [];
+    for (const line of logs) {
+      if (!line) continue;
+      const bodyOnly = line.replace(/^\[.*?\]\s*/, '').trim();
+      if (!bodyOnly) continue;
+
+      if (result.length > 0 && isProgressLine(line) && isProgressLine(result[result.length - 1])) {
+        result[result.length - 1] = line;
+      } else {
+        result.push(line);
+      }
     }
-  };
+    return result;
+  }, [logs]);
 
   useEffect(() => {
     if (isAtBottom && logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [logs, isAtBottom]);
+  }, [displayLogs, isAtBottom]);
 
   const scrollToBottom = () => {
     setIsAtBottom(true);
@@ -95,15 +111,12 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   };
 
   useEffect(() => {
-    // Initial fetch including full logs
     fetchBuildStatus(true);
 
-    // Polling build status & syncing logs if server has newer lines
     const pollInterval = setInterval(() => {
       fetchBuildStatus(false);
     }, 3000);
 
-    // Connect SSE stream for realtime line appends
     const eventSource = new EventSource(`/api/builds/${buildId}/stream`);
 
     eventSource.addEventListener('log', (event: MessageEvent) => {
@@ -126,12 +139,8 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     };
   }, [buildId]);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'auto' });
-  }, [logs]);
-
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div className="w-full max-w-5xl h-[85vh] bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         
         {/* Header */}
@@ -214,43 +223,21 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           onScroll={handleScroll}
           className="relative flex-1 p-5 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1 bg-zinc-950 leading-relaxed"
         >
-          {logs.length === 0 ? (
+          {displayLogs.length === 0 ? (
             <div className="text-zinc-600 italic">Waiting for live build output stream...</div>
           ) : (
-            (() => {
-              const isProgressLine = (str: string): boolean => {
-                const clean = str.replace(/^\[.*?\]\s*/, '').trim();
-                if (!clean) return false;
-                return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(clean) ||
-                       /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(clean);
-              };
-
-              const displayLogs: string[] = [];
-              for (const line of logs) {
-                if (!line) continue;
-                const bodyOnly = line.replace(/^\[.*?\]\s*/, '').trim();
-                if (!bodyOnly) continue; // Skip blank timestamp lines
-
-                if (displayLogs.length > 0 && isProgressLine(line) && isProgressLine(displayLogs[displayLogs.length - 1])) {
-                  displayLogs[displayLogs.length - 1] = line;
-                } else {
-                  displayLogs.push(line);
+            displayLogs.map((line, i) => (
+              <div
+                key={i}
+                className={
+                  line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
+                  line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :
+                  line.includes('[EXEC]') || line.includes('[ISO EXEC]') ? 'text-cyan-400' : 'text-zinc-300'
                 }
-              }
-
-              return displayLogs.map((line, i) => (
-                <div
-                  key={i}
-                  className={
-                    line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
-                    line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :
-                    line.includes('[EXEC]') || line.includes('[ISO EXEC]') ? 'text-cyan-400' : 'text-zinc-300'
-                  }
-                >
-                  {line}
-                </div>
-              ));
-            })()
+              >
+                {line}
+              </div>
+            ))
           )}
           <div ref={logEndRef} />
 

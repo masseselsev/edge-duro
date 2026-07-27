@@ -244,8 +244,9 @@ HOOKEOF
 else
   {postinst_body}
 fi
-# 3. Clean up non-Intel firmware, docs, locales, and APT caches from rootfs
-echo "[POSTINST] Stripping non-Intel firmware, documentation, and APT cache..."
+# 3. Clean up non-Intel firmware, docs, locales, machine-id for ConditionFirstBoot, and APT caches from rootfs
+echo "[POSTINST] Stripping non-Intel firmware, documentation, and uninitializing machine-id for firstboot..."
+rm -f "$ROOT"/etc/machine-id || true
 rm -rf "$ROOT"/usr/lib/firmware/nvidia* "$ROOT"/usr/lib/firmware/amdgpu* "$ROOT"/usr/lib/firmware/radeon* "$ROOT"/usr/lib/firmware/qcom* "$ROOT"/usr/lib/firmware/mellanox* "$ROOT"/usr/lib/firmware/mrvl* "$ROOT"/usr/lib/firmware/mediatek* "$ROOT"/usr/lib/firmware/broadcom* "$ROOT"/usr/lib/firmware/brcm* "$ROOT"/usr/lib/firmware/ath9k* "$ROOT"/usr/lib/firmware/ath10k* "$ROOT"/usr/lib/firmware/ath11k* "$ROOT"/usr/lib/firmware/ath12k* "$ROOT"/usr/lib/firmware/cxgb3* "$ROOT"/usr/lib/firmware/cxgb4* "$ROOT"/usr/lib/firmware/liquidio* "$ROOT"/usr/lib/firmware/netronome* "$ROOT"/usr/share/doc/* "$ROOT"/usr/share/man/* "$ROOT"/usr/share/info/* "$ROOT"/usr/share/help/* "$ROOT"/usr/share/gtk-doc/* "$ROOT"/usr/share/locale/* "$ROOT"/usr/share/sounds/* "$ROOT"/usr/share/icons/* "$ROOT"/var/cache/apt/* "$ROOT"/var/lib/apt/lists/* || true
 """
     for hk in ["mkosi.postinst", "mkosi.finalize"]:

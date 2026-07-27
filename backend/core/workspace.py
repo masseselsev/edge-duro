@@ -243,7 +243,8 @@ cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
 
 # 1. Install pre-downloaded Edge platform .deb packages inside chroot
 if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
-  echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg.  # Mount pseudo-filesystems for apt/dpkg to work correctly
+  echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
+  # Mount pseudo-filesystems for apt/dpkg to work correctly
   mount -t proc proc "$ROOT/proc" 2>/dev/null || true
   mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true
   mount --bind /dev "$ROOT/dev" 2>/dev/null || true

@@ -8,8 +8,9 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
     """
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
-    if "systemd-boot" not in pkgs:
-        pkgs.append("systemd-boot")
+    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot"]:
+        if req_pkg not in pkgs:
+            pkgs.append(req_pkg)
 
     distro = (recipe.distribution or "debian").lower()
     if "debian" in distro and not any("linux-image" in p.lower() for p in pkgs):

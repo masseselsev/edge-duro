@@ -153,6 +153,8 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
             f.write(f'Dir::Cache::Archives "{release_apt_cache}";\n')
             f.write('APT::Acquire::Retries "5";\n')
             f.write('DPkg::Lock::Timeout "60";\n')
+            f.write('APT::Install-Recommends "0";\n')
+            f.write('APT::Install-Suggests "0";\n')
 
     # 3.5. Prepare script — runs on HOST before package installation (mkosi v14)
     # Uses $BUILDROOT to access the rootfs. Writes custom repos and runs apt-get update

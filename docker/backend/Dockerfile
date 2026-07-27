@@ -3,6 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev curl \
     mkosi systemd-container debootstrap \
     xorriso squashfs-tools mtools dosfstools \
+    grub-efi-amd64-bin grub-common \
     ubuntu-keyring debian-archive-keyring \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app

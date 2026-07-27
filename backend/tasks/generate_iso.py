@@ -157,56 +157,60 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 if esp_extracted:
                                     log_to_task(build_id, f"[ISO] Extracted EFI System Partition image ({os.path.getsize(efi_img_path)} bytes)")
                                     
-                                    # Copy /EFI directory tree into iso_staging/EFI for VirtualBox UEFI discovery
+                                    # Copy kernel and initrd out of ESP into iso_staging/boot/ for ISO 9660 discovery
+                                    iso_boot_dir = os.path.join(iso_staging, "boot")
+                                    os.makedirs(iso_boot_dir, exist_ok=True)
                                     mcopy_bin = shutil.which("mcopy")
-                                    extracted_efi_tree = False
                                     if mcopy_bin:
-                                        try:
-                                            res_mc = subprocess.run([mcopy_bin, "-s", "-i", efi_img_path, "::EFI", iso_staging], capture_output=True, text=True)
-                                            if res_mc.returncode == 0 and os.path.exists(os.path.join(iso_staging, "EFI")):
-                                                extracted_efi_tree = True
-                                                log_to_task(build_id, "[ISO] Extracted /EFI directory tree using mcopy user-space driver")
-                                        except Exception as e_mc:
-                                            log_to_task(build_id, f"[ISO WARNING] mcopy extraction failed: {e_mc}")
-
-                                    if not extracted_efi_tree:
-                                        mnt_dir = os.path.join(ws_path, "mnt_efi")
-                                        os.makedirs(mnt_dir, exist_ok=True)
-                                        try:
-                                            subprocess.run(["mount", "-o", "loop,ro", efi_img_path, mnt_dir], check=True, capture_output=True)
-                                            if os.path.exists(os.path.join(mnt_dir, "EFI")):
-                                                shutil.copytree(os.path.join(mnt_dir, "EFI"), os.path.join(iso_staging, "EFI"), dirs_exist_ok=True)
-                                                extracted_efi_tree = True
-                                                log_to_task(build_id, "[ISO] Copied /EFI directory tree into ISO filesystem root via loop mount")
-                                            subprocess.run(["umount", mnt_dir], check=True, capture_output=True)
-                                        except Exception as err:
-                                            log_to_task(build_id, f"[ISO WARNING] Loop mount EFI extraction: {err}")
-                                        finally:
-                                            if os.path.exists(mnt_dir):
-                                                try:
-                                                    subprocess.run(["umount", "-l", mnt_dir], capture_output=True)
-                                                    os.rmdir(mnt_dir)
-                                                except Exception:
-                                                    pass
-
-                                    # Ensure both uppercase BOOTX64.EFI and lowercase bootx64.efi exist
-                                    efi_boot_dir = os.path.join(iso_staging, "EFI", "BOOT")
-                                    if os.path.exists(efi_boot_dir):
-                                        b64_upper = os.path.join(efi_boot_dir, "BOOTX64.EFI")
-                                        b64_lower = os.path.join(efi_boot_dir, "bootx64.efi")
-                                        if os.path.exists(b64_upper) and not os.path.exists(b64_lower):
-                                            try:
-                                                shutil.copy2(b64_upper, b64_lower)
-                                            except Exception:
-                                                pass
-                                        elif os.path.exists(b64_lower) and not os.path.exists(b64_upper):
-                                            try:
-                                                shutil.copy2(b64_lower, b64_upper)
-                                            except Exception:
-                                                pass
+                                        subprocess.run([mcopy_bin, "-i", efi_img_path, "::vmlinuz", os.path.join(iso_boot_dir, "vmlinuz")], capture_output=True)
+                                        subprocess.run([mcopy_bin, "-i", efi_img_path, "::initrd.img", os.path.join(iso_boot_dir, "initrd.img")], capture_output=True)
                                     break
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] ESP partition extraction failed: {e}")
+
+            # Try generating a standalone GRUB2 UEFI bootloader with built-in ISO 9660 drivers for VirtualBox compatibility
+            grub_mkst = shutil.which("grub-mkstandalone")
+            mkfs_fat = shutil.which("mkfs.vfat")
+            mcopy_bin = shutil.which("mcopy")
+            mmd_bin = shutil.which("mmd")
+
+            if grub_mkst and mkfs_fat and mcopy_bin and mmd_bin:
+                try:
+                    log_to_task(build_id, "[ISO] Generating GRUB2 universal ISO 9660 UEFI bootloader...")
+                    grub_cfg_path = os.path.join(ws_path, "grub_embedded.cfg")
+                    with open(grub_cfg_path, "w") as f:
+                        f.write("""
+set default=0
+set timeout=3
+
+menuentry "Edge OS (UEFI ISO)" {
+    search --no-floppy --set=root --file /boot/vmlinuz
+    linux /boot/vmlinuz root=LABEL=edgeroot rw console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off
+    initrd /boot/initrd.img
+}
+""")
+                    efi_boot_dir = os.path.join(iso_staging, "EFI", "BOOT")
+                    os.makedirs(efi_boot_dir, exist_ok=True)
+                    bootx64_path = os.path.join(efi_boot_dir, "BOOTX64.EFI")
+
+                    subprocess.run([
+                        grub_mkst,
+                        "--format=x86_64-efi",
+                        f"--output={bootx64_path}",
+                        f"boot/grub/grub.cfg={grub_cfg_path}"
+                    ], check=True, capture_output=True)
+
+                    shutil.copy2(bootx64_path, os.path.join(efi_boot_dir, "bootx64.efi"))
+
+                    # Create clean 16MB FAT image efi.img for El Torito
+                    subprocess.run([mkfs_fat, "-C", efi_img_path, "16384"], check=True, capture_output=True)
+                    subprocess.run([mmd_bin, "-i", efi_img_path, "::EFI"], check=True, capture_output=True)
+                    subprocess.run([mmd_bin, "-i", efi_img_path, "::EFI/BOOT"], check=True, capture_output=True)
+                    subprocess.run([mcopy_bin, "-i", efi_img_path, bootx64_path, "::EFI/BOOT/BOOTX64.EFI"], check=True, capture_output=True)
+                    esp_extracted = True
+                    log_to_task(build_id, "[ISO] Generated GRUB2 universal UEFI boot image for VirtualBox ISO compatibility")
+                except Exception as e_grub:
+                    log_to_task(build_id, f"[ISO WARNING] GRUB2 standalone creation failed: {e_grub}")
 
             # Copy compressed raw.xz artifact into ISO staging directory (saves 2.5GB in ISO)
             if build and build.artifact_path and os.path.exists(build.artifact_path):

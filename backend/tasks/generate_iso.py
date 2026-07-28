@@ -293,19 +293,34 @@ mount -t proc proc /proc 2>/dev/null
 mount -t sysfs sysfs /sys 2>/dev/null
 mount -t devtmpfs dev /dev 2>/dev/null
 
-TARGET_DISK=$(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | head -n 1 | awk '{print $1}')
+# Identify the boot installation device to avoid overwriting the USB installer itself
+BOOT_DEV=$(df / 2>/dev/null | tail -n 1 | awk '{print $1}' | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//' | sed 's#/dev/##')
+
+TARGET_DISK=""
+for d in $(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | awk '{print $1}'); do
+    if [ "$d" != "$BOOT_DEV" ] && [ "$d" != "sr0" ]; then
+        TARGET_DISK="$d"
+        break
+    fi
+done
+
+if [ -z "$TARGET_DISK" ]; then
+    TARGET_DISK=$(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | grep -v sr0 | head -n 1 | awk '{print $1}')
+fi
+
 RAW_XZ=$(ls /edge_*.raw.xz 2>/dev/null | head -n 1)
 
 if [ -n "$TARGET_DISK" ] && [ -n "$RAW_XZ" ]; then
     echo "[INSTALLER] Target Disk: /dev/$TARGET_DISK"
-    echo "[INSTALLER] Writing $RAW_XZ to /dev/$TARGET_DISK..."
+    echo "[INSTALLER] Source Image: $RAW_XZ"
+    echo "[INSTALLER] Deploying Edge OS onto /dev/$TARGET_DISK..."
     xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M status=progress conv=fsync
     echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK successfully!"
-    echo "[INSTALLER] Rebooting system into Edge OS..."
+    echo "[INSTALLER] Installation Complete! Rebooting..."
     sync
     reboot -f
 else
-    echo "[INSTALLER WARNING] Automated installer shell active."
+    echo "[INSTALLER WARNING] Target disk or RAW image not found."
     exec /bin/sh
 fi
 """)

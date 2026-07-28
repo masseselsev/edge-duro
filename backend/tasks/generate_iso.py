@@ -282,19 +282,47 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
-            # Step 2: Write grub.cfg for ISO boot
+            # Step 2: Write automated installer script install.sh and grub.cfg for ISO boot
+            install_sh_path = os.path.join(iso_staging, "install.sh")
+            with open(install_sh_path, "w") as f:
+                f.write("""#!/bin/sh
+echo "===================================================="
+echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
+echo "===================================================="
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+mount -t devtmpfs dev /dev 2>/dev/null
+
+TARGET_DISK=$(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | head -n 1 | awk '{print $1}')
+RAW_XZ=$(ls /edge_*.raw.xz 2>/dev/null | head -n 1)
+
+if [ -n "$TARGET_DISK" ] && [ -n "$RAW_XZ" ]; then
+    echo "[INSTALLER] Target Disk: /dev/$TARGET_DISK"
+    echo "[INSTALLER] Writing $RAW_XZ to /dev/$TARGET_DISK..."
+    xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M status=progress conv=fsync
+    echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK successfully!"
+    echo "[INSTALLER] Rebooting system into Edge OS..."
+    sync
+    reboot -f
+else
+    echo "[INSTALLER WARNING] Automated installer shell active."
+    exec /bin/sh
+fi
+""")
+            os.chmod(install_sh_path, 0o755)
+
             grub_cfg_path = os.path.join(iso_grub_dir, "grub.cfg")
             with open(grub_cfg_path, "w") as f:
                 f.write("""set default=0
 set timeout=3
 
-menuentry "Edge OS Live / Installer (ISO Boot)" {
+menuentry "Edge OS Auto-Installer (Install to Target Disk)" {
     search --no-floppy --set=root --label DURO_BOOT
-    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0 ipv6.disable=1 nohz=off
+    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw init=/install.sh quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0
     initrd /boot/initrd.img
 }
 
-menuentry "Edge OS (Disk Boot / edgeroot)" {
+menuentry "Edge OS Direct Disk Boot (edgeroot)" {
     search --no-floppy --set=root --label edgeroot
     linux /boot/vmlinuz root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0 ipv6.disable=1 nohz=off
     initrd /boot/initrd.img

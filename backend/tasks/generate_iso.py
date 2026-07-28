@@ -387,21 +387,35 @@ echo ""
 # Mount the ISO/USB boot media
 mkdir -p /mnt/cdrom
 MOUNTED=0
-# Try by label first (ISO volume label)
-for dev in $(blkid -o device 2>/dev/null); do
-    LABEL=$(blkid -s LABEL -o value "$dev" 2>/dev/null)
-    if [ "$LABEL" = "DURO_BOOT" ]; then
-        mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
-    fi
-done
-# Fallback: try all CD-ROM / removable devices
-if [ "$MOUNTED" = "0" ]; then
-    for dev in /dev/sr0 /dev/sr1 /dev/sdb1 /dev/sdc1; do
+
+# Try mounting with explicit filesystem types and retry for slow CD-ROM spinup
+ATTEMPTS=0
+while [ "$MOUNTED" = "0" ] && [ "$ATTEMPTS" -lt 5 ]; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+
+    # Try CD-ROM devices first (most common for ISO boot)
+    for dev in /dev/sr0 /dev/sr1; do
         if [ -b "$dev" ]; then
-            mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+            mount -t iso9660 -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
         fi
     done
-fi
+
+    # Try USB/SATA partitions
+    if [ "$MOUNTED" = "0" ]; then
+        for dev in /dev/sda1 /dev/sdb1 /dev/sdc1 /dev/sdd1; do
+            if [ -b "$dev" ]; then
+                mount -t iso9660 -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+                mount -t vfat -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+                mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+            fi
+        done
+    fi
+
+    if [ "$MOUNTED" = "0" ]; then
+        echo "[INSTALLER] Waiting for boot media... (attempt $ATTEMPTS/5)"
+        sleep 2
+    fi
+done
 
 if [ "$MOUNTED" = "0" ]; then
     echo "[INSTALLER ERROR] Cannot mount boot media!"

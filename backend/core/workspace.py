@@ -61,22 +61,18 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
             lines.append("Type=esp")
             lines.append("Format=vfat")
             lines.append("CopyFiles=/boot:/")
-            lines.append("MountPoint=/boot")
         elif p_type == "root":
             lines.append("Type=root")
             lines.append(f"Format={p_fs}")
             lines.append("CopyFiles=/")
-            lines.append("MountPoint=/")
         elif p_type == "swap":
             lines.append("Type=swap")
             lines.append("Format=swap")
-            lines.append("MountPoint=swap")
         else:
             lines.append("Type=linux-generic")
             lines.append(f"Format={p_fs}")
             if p_mount and p_mount != "/":
                 lines.append(f"CopyFiles={p_mount}")
-                lines.append(f"MountPoint={p_mount}")
 
         if p_label:
             lines.append(f"Label={p_label}")

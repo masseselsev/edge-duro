@@ -288,8 +288,14 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                 f.write("""set default=0
 set timeout=3
 
-menuentry "Edge OS Installer (UEFI)" {
-    search --no-floppy --set=root --file /boot/vmlinuz
+menuentry "Edge OS Live / Installer (ISO Boot)" {
+    search --no-floppy --set=root --label DURO_BOOT
+    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off
+    initrd /boot/initrd.img
+}
+
+menuentry "Edge OS (Disk Boot / edgeroot)" {
+    search --no-floppy --set=root --label edgeroot
     linux /boot/vmlinuz root=LABEL=edgeroot rw console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off
     initrd /boot/initrd.img
 }

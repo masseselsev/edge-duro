@@ -282,9 +282,16 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
-            # Step 2: Write automated installer script install.sh and grub.cfg for ISO boot
-            install_sh_path = os.path.join(iso_staging, "install.sh")
-            with open(install_sh_path, "w") as f:
+            # Step 2: Build a standalone RAM initrd overlay (installer.cpio.gz)
+            # This overlay runs /init directly in RAM when GRUB boots the ISO,
+            # completely bypassing initrd-switch-root.service and systemd rootfs dependencies.
+            ramfs_dir = os.path.join(ws_path, "installer_ramfs")
+            if os.path.exists(ramfs_dir):
+                shutil.rmtree(ramfs_dir)
+            os.makedirs(ramfs_dir, exist_ok=True)
+
+            init_script_path = os.path.join(ramfs_dir, "init")
+            with open(init_script_path, "w") as f:
                 f.write("""#!/bin/sh
 echo "===================================================="
 echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
@@ -293,8 +300,13 @@ mount -t proc proc /proc 2>/dev/null
 mount -t sysfs sysfs /sys 2>/dev/null
 mount -t devtmpfs dev /dev 2>/dev/null
 
-# Identify the boot installation device to avoid overwriting the USB installer itself
-BOOT_DEV=$(df / 2>/dev/null | tail -n 1 | awk '{print $1}' | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//' | sed 's#/dev/##')
+sleep 2
+
+mkdir -p /cdrom
+mount -t iso9660 /dev/disk/by-label/DURO_BOOT /cdrom 2>/dev/null || mount /dev/disk/by-label/DURO_BOOT /cdrom 2>/dev/null
+
+RAW_XZ=$(ls /cdrom/edge_*.raw.xz 2>/dev/null | head -n 1)
+BOOT_DEV=$(df /cdrom 2>/dev/null | tail -n 1 | awk '{print $1}' | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//' | sed 's#/dev/##')
 
 TARGET_DISK=""
 for d in $(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | awk '{print $1}'); do
@@ -308,23 +320,30 @@ if [ -z "$TARGET_DISK" ]; then
     TARGET_DISK=$(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | grep -v sr0 | head -n 1 | awk '{print $1}')
 fi
 
-RAW_XZ=$(ls /edge_*.raw.xz 2>/dev/null | head -n 1)
-
 if [ -n "$TARGET_DISK" ] && [ -n "$RAW_XZ" ]; then
-    echo "[INSTALLER] Target Disk: /dev/$TARGET_DISK"
+    echo "[INSTALLER] Target Installation Disk: /dev/$TARGET_DISK"
     echo "[INSTALLER] Source Image: $RAW_XZ"
     echo "[INSTALLER] Deploying Edge OS onto /dev/$TARGET_DISK..."
     xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M status=progress conv=fsync
     echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK successfully!"
-    echo "[INSTALLER] Installation Complete! Rebooting..."
+    echo "[INSTALLER] Installation Complete! Rebooting in 3 seconds..."
     sync
+    sleep 3
     reboot -f
 else
-    echo "[INSTALLER WARNING] Target disk or RAW image not found."
+    echo "[INSTALLER ERROR] Target disk or RAW image not found."
+    echo "[INSTALLER] Dropping to emergency shell:"
     exec /bin/sh
 fi
 """)
-            os.chmod(install_sh_path, 0o755)
+            os.chmod(init_script_path, 0o755)
+
+            installer_cpio_path = os.path.join(iso_boot_dir, "installer.cpio.gz")
+            subprocess.run(
+                f"cd {ramfs_dir} && find . | cpio -o -H newc | gzip -9 > {installer_cpio_path}",
+                shell=True,
+                check=True
+            )
 
             grub_cfg_path = os.path.join(iso_grub_dir, "grub.cfg")
             with open(grub_cfg_path, "w") as f:
@@ -333,8 +352,8 @@ set timeout=3
 
 menuentry "Edge OS Auto-Installer (Install to Target Disk)" {
     search --no-floppy --set=root --label DURO_BOOT
-    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw init=/install.sh quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0
-    initrd /boot/initrd.img
+    linux /boot/vmlinuz quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0
+    initrd /boot/installer.cpio.gz /boot/initrd.img
 }
 
 menuentry "Edge OS Direct Disk Boot (edgeroot)" {

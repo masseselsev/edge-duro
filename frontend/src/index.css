@@ -105,6 +105,13 @@ body {
   -webkit-backdrop-filter: none !important;
 }
 
+/* Disable continuous GPU-heavy infinite animations to keep browser GPU 3D load at ~0% */
+.animate-ping,
+.animate-pulse,
+.animate-bounce {
+  animation: none !important;
+}
+
 label {
   font-size: 11.5px !important;
   letter-spacing: 0.05em !important;

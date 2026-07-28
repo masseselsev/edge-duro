@@ -155,6 +155,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
 
     if recipe.kernel_params and recipe.kernel_params.strip():
         config_lines.append(f"KernelCommandLine={recipe.kernel_params.strip()}")
+    else:
+        config_lines.append("KernelCommandLine=quiet loglevel=3 console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off")
 
     if recipe.raw_mkosi_conf and recipe.raw_mkosi_conf.strip():
         config_lines.append("\n# Custom Raw Override")

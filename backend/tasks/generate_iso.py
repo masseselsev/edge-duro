@@ -282,78 +282,216 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
-            # Step 2: Build a standalone RAM initrd overlay (installer.cpio.gz)
-            # This overlay runs /init directly in RAM when GRUB boots the ISO,
-            # completely bypassing initrd-switch-root.service and systemd rootfs dependencies.
+            # Step 2: Build a SELF-CONTAINED installer initramfs (installer.cpio.gz)
+            # This initramfs runs entirely in RAM with its own /bin/sh (busybox) and /usr/bin/xz.
+            # It does NOT depend on initrd.img — no systemd, no switch_root, no rootfs needed.
             ramfs_dir = os.path.join(ws_path, "installer_ramfs")
             if os.path.exists(ramfs_dir):
                 shutil.rmtree(ramfs_dir)
-            os.makedirs(ramfs_dir, exist_ok=True)
 
+            # Create minimal rootfs directory structure
+            for d in ["bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys", "mnt/cdrom", "tmp", "etc", "lib", "lib64"]:
+                os.makedirs(os.path.join(ramfs_dir, d), exist_ok=True)
+
+            # Copy busybox-static (provides sh, mount, dd, ls, echo, cat, sleep, reboot, df, awk, sed, grep, etc.)
+            busybox_src = shutil.which("busybox") or "/bin/busybox"
+            if not os.path.exists(busybox_src):
+                # Try common static busybox paths
+                for candidate in ["/usr/bin/busybox", "/bin/busybox-static", "/usr/bin/busybox-static"]:
+                    if os.path.exists(candidate):
+                        busybox_src = candidate
+                        break
+            busybox_dst = os.path.join(ramfs_dir, "bin", "busybox")
+            shutil.copy2(busybox_src, busybox_dst)
+            os.chmod(busybox_dst, 0o755)
+
+            # Create busybox symlinks for all needed applets
+            busybox_applets = [
+                "sh", "ash", "mount", "umount", "dd", "ls", "echo", "cat", "sleep",
+                "reboot", "poweroff", "halt", "df", "awk", "sed", "grep", "head",
+                "tail", "mkdir", "rm", "cp", "mv", "ln", "sync", "dmesg",
+                "mdev", "switch_root", "find", "xargs", "wc", "tr", "cut",
+                "blkid", "fdisk", "mkswap", "swapon", "swapoff", "free",
+                "ps", "kill", "test", "[", "true", "false", "expr",
+            ]
+            for applet in busybox_applets:
+                link_path = os.path.join(ramfs_dir, "bin", applet)
+                if not os.path.exists(link_path):
+                    os.symlink("busybox", link_path)
+            # Also link into /sbin
+            for applet in ["reboot", "poweroff", "halt", "mdev", "switch_root", "blkid", "fdisk"]:
+                link_path = os.path.join(ramfs_dir, "sbin", applet)
+                if not os.path.exists(link_path):
+                    os.symlink("../bin/busybox", link_path)
+
+            # Copy xz binary (for xzcat decompression of .raw.xz images)
+            xz_src = shutil.which("xz") or "/usr/bin/xz"
+            xz_dst = os.path.join(ramfs_dir, "usr", "bin", "xz")
+            shutil.copy2(xz_src, xz_dst)
+            os.chmod(xz_dst, 0o755)
+            # Create xzcat symlink
+            os.symlink("xz", os.path.join(ramfs_dir, "usr", "bin", "xzcat"))
+
+            # Copy xz's shared library dependencies into the initramfs
+            try:
+                ldd_res = subprocess.run(["ldd", xz_src], capture_output=True, text=True)
+                if ldd_res.returncode == 0:
+                    for line in ldd_res.stdout.splitlines():
+                        parts = line.strip().split()
+                        # Format: "libfoo.so => /path/to/libfoo.so (0x...)"
+                        lib_path = None
+                        if "=>" in line and len(parts) >= 3:
+                            lib_path = parts[2]
+                        elif parts and parts[0].startswith("/"):
+                            lib_path = parts[0]
+                        if lib_path and os.path.exists(lib_path) and not lib_path.startswith("linux-vdso"):
+                            # Determine target directory based on lib path
+                            if "x86_64" in lib_path or "64" in os.path.dirname(lib_path):
+                                target_dir = os.path.join(ramfs_dir, "lib64")
+                            else:
+                                target_dir = os.path.join(ramfs_dir, "lib")
+                            os.makedirs(target_dir, exist_ok=True)
+                            dst = os.path.join(target_dir, os.path.basename(lib_path))
+                            if not os.path.exists(dst):
+                                shutil.copy2(lib_path, dst)
+                    # Also copy the dynamic linker if present
+                    for ld_path in ["/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"]:
+                        if os.path.exists(ld_path):
+                            dst_dir = os.path.join(ramfs_dir, os.path.dirname(ld_path).lstrip("/"))
+                            os.makedirs(dst_dir, exist_ok=True)
+                            dst = os.path.join(dst_dir, os.path.basename(ld_path))
+                            if not os.path.exists(dst):
+                                shutil.copy2(ld_path, dst)
+            except Exception as e:
+                log_to_task(build_id, f"[ISO WARNING] Failed to copy xz libs: {e}")
+
+            # Write /init installer script
             init_script_path = os.path.join(ramfs_dir, "init")
             with open(init_script_path, "w") as f:
                 f.write("""#!/bin/sh
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export LD_LIBRARY_PATH=/lib:/lib64:/lib/x86_64-linux-gnu
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs dev /dev
+
+# Wait for device nodes to settle
+sleep 3
+
 echo "===================================================="
 echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
 echo "===================================================="
-mount -t proc proc /proc 2>/dev/null
-mount -t sysfs sysfs /sys 2>/dev/null
-mount -t devtmpfs dev /dev 2>/dev/null
+echo ""
 
-sleep 2
+# Mount the ISO/USB boot media
+mkdir -p /mnt/cdrom
+MOUNTED=0
+# Try by label first (ISO volume label)
+for dev in $(blkid -o device 2>/dev/null); do
+    LABEL=$(blkid -s LABEL -o value "$dev" 2>/dev/null)
+    if [ "$LABEL" = "DURO_BOOT" ]; then
+        mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+    fi
+done
+# Fallback: try all CD-ROM / removable devices
+if [ "$MOUNTED" = "0" ]; then
+    for dev in /dev/sr0 /dev/sr1 /dev/sdb1 /dev/sdc1; do
+        if [ -b "$dev" ]; then
+            mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
+        fi
+    done
+fi
 
-mkdir -p /cdrom
-mount -t iso9660 /dev/disk/by-label/DURO_BOOT /cdrom 2>/dev/null || mount /dev/disk/by-label/DURO_BOOT /cdrom 2>/dev/null
+if [ "$MOUNTED" = "0" ]; then
+    echo "[INSTALLER ERROR] Cannot mount boot media!"
+    echo "Available block devices:"
+    ls -la /dev/sd* /dev/sr* /dev/nvme* 2>/dev/null
+    echo ""
+    echo "Dropping to emergency shell..."
+    exec /bin/sh
+fi
 
-RAW_XZ=$(ls /cdrom/edge_*.raw.xz 2>/dev/null | head -n 1)
-BOOT_DEV=$(df /cdrom 2>/dev/null | tail -n 1 | awk '{print $1}' | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//' | sed 's#/dev/##')
+# Find the .raw.xz image on boot media
+RAW_XZ=$(ls /mnt/cdrom/edge_*.raw.xz /mnt/cdrom/*.raw.xz 2>/dev/null | head -n 1)
+if [ -z "$RAW_XZ" ]; then
+    echo "[INSTALLER ERROR] No .raw.xz image found on boot media!"
+    echo "Contents of boot media:"
+    ls -la /mnt/cdrom/
+    echo ""
+    echo "Dropping to emergency shell..."
+    exec /bin/sh
+fi
 
+# Determine boot device parent disk to exclude it from target selection
+BOOT_DISK=$(echo "$BOOT_PART" | sed 's/[0-9]*$//' | sed 's/p[0-9]*$//')
+
+# Find target installation disk (first non-boot, non-cdrom disk)
 TARGET_DISK=""
-for d in $(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | awk '{print $1}'); do
-    if [ "$d" != "$BOOT_DEV" ] && [ "$d" != "sr0" ]; then
+for d in $(ls /sys/block/ 2>/dev/null); do
+    case "$d" in
+        loop*|ram*|sr*|dm-*) continue ;;
+    esac
+    # Skip the boot device
+    if [ "/dev/$d" = "$BOOT_DISK" ]; then
+        continue
+    fi
+    # Verify it's a real disk
+    if [ -b "/dev/$d" ]; then
         TARGET_DISK="$d"
         break
     fi
 done
 
 if [ -z "$TARGET_DISK" ]; then
-    TARGET_DISK=$(lsblk -dn -o NAME,TYPE 2>/dev/null | grep disk | grep -v sr0 | head -n 1 | awk '{print $1}')
-fi
-
-if [ -n "$TARGET_DISK" ] && [ -n "$RAW_XZ" ]; then
-    echo "[INSTALLER] Target Installation Disk: /dev/$TARGET_DISK"
-    echo "[INSTALLER] Source Image: $RAW_XZ"
-    echo "[INSTALLER] Deploying Edge OS onto /dev/$TARGET_DISK..."
-    xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M status=progress conv=fsync
-    echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK successfully!"
-    echo "[INSTALLER] Installation Complete! Rebooting in 3 seconds..."
-    sync
-    sleep 3
-    reboot -f
-else
-    echo "[INSTALLER ERROR] Target disk or RAW image not found."
-    echo "[INSTALLER] Dropping to emergency shell:"
+    echo "[INSTALLER ERROR] No target disk found!"
+    echo "Available block devices:"
+    ls /sys/block/
+    echo ""
+    echo "Dropping to emergency shell..."
     exec /bin/sh
 fi
+
+DISK_SIZE=$(cat /sys/block/$TARGET_DISK/size 2>/dev/null)
+DISK_SIZE_GB=$(( DISK_SIZE * 512 / 1024 / 1024 / 1024 ))
+
+echo "[INSTALLER] Source Image : $RAW_XZ"
+echo "[INSTALLER] Target Disk  : /dev/$TARGET_DISK ($DISK_SIZE_GB GB)"
+echo "[INSTALLER] Deploying Edge OS..."
+echo ""
+
+xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M conv=fsync 2>&1
+
+echo ""
+echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK!"
+echo "[INSTALLER] Rebooting in 5 seconds..."
+sync
+sleep 5
+echo b > /proc/sysrq-trigger
+reboot -f
 """)
             os.chmod(init_script_path, 0o755)
 
+            # Pack the self-contained initramfs
             installer_cpio_path = os.path.join(iso_boot_dir, "installer.cpio.gz")
             subprocess.run(
-                f"cd {ramfs_dir} && find . | cpio -o -H newc | gzip -9 > {installer_cpio_path}",
+                f"cd {ramfs_dir} && find . | cpio -o -H newc 2>/dev/null | gzip -9 > {installer_cpio_path}",
                 shell=True,
                 check=True
             )
+            installer_size = os.path.getsize(installer_cpio_path)
+            log_to_task(build_id, f"[ISO] Built installer initramfs: {installer_size / 1024:.0f} KB")
 
+            # Write GRUB config — installer uses ONLY installer.cpio.gz, no initrd.img
             grub_cfg_path = os.path.join(iso_grub_dir, "grub.cfg")
             with open(grub_cfg_path, "w") as f:
                 f.write("""set default=0
-set timeout=3
+set timeout=5
 
 menuentry "Edge OS Auto-Installer (Install to Target Disk)" {
     search --no-floppy --set=root --label DURO_BOOT
-    linux /boot/vmlinuz quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0
-    initrd /boot/installer.cpio.gz /boot/initrd.img
+    linux /boot/vmlinuz console=ttyS0,115200 console=tty0
+    initrd /boot/installer.cpio.gz
 }
 
 menuentry "Edge OS Direct Disk Boot (edgeroot)" {

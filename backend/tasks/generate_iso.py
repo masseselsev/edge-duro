@@ -290,13 +290,13 @@ set timeout=3
 
 menuentry "Edge OS Live / Installer (ISO Boot)" {
     search --no-floppy --set=root --label DURO_BOOT
-    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw quiet loglevel=3 console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off
+    linux /boot/vmlinuz root=LABEL=DURO_BOOT rw quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0 ipv6.disable=1 nohz=off
     initrd /boot/initrd.img
 }
 
 menuentry "Edge OS (Disk Boot / edgeroot)" {
     search --no-floppy --set=root --label edgeroot
-    linux /boot/vmlinuz root=LABEL=edgeroot rw quiet loglevel=3 console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off
+    linux /boot/vmlinuz root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0 ipv6.disable=1 nohz=off
     initrd /boot/initrd.img
 }
 """)

@@ -107,3 +107,9 @@ volumes:
     name: edge-duro_workspace
   frontend-build:
     name: edge-duro_frontend-build
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1300

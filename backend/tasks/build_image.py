@@ -233,22 +233,27 @@ def build_image_task(self, build_id: str, recipe_id: int):
                                 break
                             out_f.write(chunk)
                             written_bytes += len(chunk)
-                            # Estimate input progress: xz typically compresses ~3:1 for disk images,
-                            # but we track output bytes as proxy. Better: read /proc to get stdin pos.
-                            # Use out_f.tell() vs expected_output as proxy is inaccurate.
-                            # Real approach: track input via /proc/<pid>/fdinfo
+                            # Track input progress by finding the fd xz has open on the source file
                             try:
-                                fdinfo_path = f"/proc/{xz_proc.pid}/fdinfo/0"
-                                if os.path.exists(fdinfo_path):
-                                    with open(fdinfo_path) as fi:
-                                        for line in fi:
-                                            if line.startswith("pos:"):
-                                                pos = int(line.split()[1])
-                                                pct = min(99, int(pos * 100 / total_bytes))
-                                                if pct >= last_pct_logged + 5:
-                                                    last_pct_logged = pct
-                                                    log_to_task(build_id, f"[XZ] Compressing... {pct}% ({pos // 1024 // 1024} MB / {total_bytes // 1024 // 1024} MB read)")
+                                fd_dir = f"/proc/{xz_proc.pid}/fd"
+                                if os.path.isdir(fd_dir):
+                                    for fd_name in os.listdir(fd_dir):
+                                        try:
+                                            link = os.readlink(os.path.join(fd_dir, fd_name))
+                                            if link == target_raw_file:
+                                                fdinfo_path = f"/proc/{xz_proc.pid}/fdinfo/{fd_name}"
+                                                with open(fdinfo_path) as fi:
+                                                    for line in fi:
+                                                        if line.startswith("pos:"):
+                                                            pos = int(line.split()[1])
+                                                            pct = min(99, int(pos * 100 / total_bytes))
+                                                            if pct >= last_pct_logged + 5:
+                                                                last_pct_logged = pct
+                                                                log_to_task(build_id, f"[XZ] Compressing... {pct}% ({pos // 1024 // 1024} MB / {total_bytes // 1024 // 1024} MB read)")
+                                                            break
                                                 break
+                                        except (OSError, ValueError):
+                                            pass
                             except Exception:
                                 pass
 

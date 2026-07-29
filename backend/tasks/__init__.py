@@ -47,7 +47,11 @@ def log_to_task(task_id: str, message: str, status: str = None) -> None:
 
     tz_name = _get_tz_name()
     try:
-        timestamp_str = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d %H:%M:%S")
+        if tz_name == "Browser Local":
+            # "Browser Local" is not a valid IANA timezone — use server local time
+            timestamp_str = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            timestamp_str = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 

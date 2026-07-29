@@ -49,7 +49,9 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
       .then((data) => {
         if (data) {
           setServerName(data.server_name || 'Edge-D.U.R.O.');
-          setTimezone(data.timezone || 'Browser Local');
+          // If stored timezone matches the browser's IANA timezone, show "Browser Local"
+          const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          setTimezone(data.timezone === browserTz ? 'Browser Local' : (data.timezone || 'Browser Local'));
           setLogRetentionDays(data.log_retention_days ?? 3);
         }
       })
@@ -63,12 +65,17 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
     setMsg('');
 
     try {
+      // Resolve "Browser Local" to the actual IANA timezone so the backend always gets a valid zone
+      const actualTimezone = timezone === 'Browser Local'
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+        : timezone;
+
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           server_name: serverName,
-          timezone,
+          timezone: actualTimezone,
           log_retention_days: Number(logRetentionDays),
         }),
       });

@@ -306,31 +306,32 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                              f"zstd -d {initrd_dst} -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
                                 gz_off = 0
                             else:
-                                # Scan for cpio TRAILER!!! to skip uncompressed microcode
+                                # Scan for compression magic bytes directly to skip uncompressed microcode
                                 with open(initrd_dst, 'rb') as ifh:
                                     raw = ifh.read(16 * 1024 * 1024)  # read first 16MB
                                 
-                                trailer = b'TRAILER!!!'
-                                idx = raw.find(trailer)
-                                gz_off = -1
-                                zstd_off = -1
-                                found_off = -1
+                                gz_idx = raw.find(b'\x1f\x8b\x08')
+                                zstd_idx = raw.find(b'\x28\xb5\x2f\xfd')
+                                lz4_idx = raw.find(b'\x02\x21\x4C\x18')
                                 
-                                if idx >= 0:
-                                    # Find the first gzip or zstd magic byte after the trailer
-                                    gz_idx = raw.find(b'\x1f\x8b\x08', idx)
-                                    zstd_idx = raw.find(b'\x28\xb5\x2f\xfd', idx)
+                                valid_offsets = []
+                                if gz_idx > 0: valid_offsets.append((gz_idx, 'gz'))
+                                if zstd_idx > 0: valid_offsets.append((zstd_idx, 'zstd'))
+                                if lz4_idx > 0: valid_offsets.append((lz4_idx, 'lz4'))
+                                
+                                if valid_offsets:
+                                    valid_offsets.sort(key=lambda x: x[0])
+                                    found_off, comp_type = valid_offsets[0]
                                     
-                                    found_off = -1
-                                    if gz_idx >= 0 and (zstd_idx < 0 or gz_idx < zstd_idx):
-                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={gz_idx} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                        found_off = gz_idx
-                                    elif zstd_idx >= 0:
-                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={zstd_idx} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                        found_off = zstd_idx
-                                    else:
-                                        break
+                                    if comp_type == 'gz':
+                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                    elif comp_type == 'zstd':
+                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                    elif comp_type == 'lz4':
+                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | lz4 -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
                                     gz_off = found_off
+                                else:
+                                    break
 
                                 res = subprocess.run(unpack_cmd, shell=True)
                             # Check if any kernel modules were extracted

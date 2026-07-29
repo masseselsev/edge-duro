@@ -294,61 +294,66 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                     shutil.rmtree(initrd_work, ignore_errors=True)
                     os.makedirs(initrd_work, exist_ok=True)
 
-                    # Find kernel version from vmlinuz filename
+                    # Find kernel version from root partition's /lib/modules
                     kver = ""
-                    if vmlinuz_src_name and "-" in vmlinuz_src_name:
-                        kver = vmlinuz_src_name.replace("vmlinuz-", "")
+                    debugfs_bin = shutil.which("debugfs")
+                    if debugfs_bin and len(partitions_info) > 1:
+                        root_part = partitions_info[1]
+                        root_img2 = os.path.join(ws_path, "root_part2.img")
+                        if not os.path.exists(root_img2):
+                            subprocess.run([
+                                "dd", f"if={target_raw}", f"of={root_img2}",
+                                "bs=512", f"skip={root_part['start']}", f"count={root_part['size']}",
+                                "status=none"
+                            ], check=True)
+                        
+                        ls_res = subprocess.run([debugfs_bin, "-R", "ls -p /lib/modules", root_img2], capture_output=True, text=True)
+                        for line in ls_res.stdout.splitlines():
+                            parts = line.split('/')
+                            if len(parts) >= 6 and parts[5] not in ('.', '..'):
+                                kver = parts[5]
+                                break
+
                     if not kver:
-                        log_to_task(build_id, f"[ISO WARNING] Could not determine kernel version from vmlinuz name '{vmlinuz_src_name}'. Skipping isofs injection.")
+                        log_to_task(build_id, "[ISO WARNING] Could not determine kernel version from /lib/modules. Skipping isofs injection.")
                     else:
-                        debugfs_bin = shutil.which("debugfs")
-                        if debugfs_bin and len(partitions_info) > 1:
-                            root_part = partitions_info[1]
-                            root_img2 = os.path.join(ws_path, "root_part2.img")
-                            if not os.path.exists(root_img2):
-                                subprocess.run([
-                                    "dd", f"if={target_raw}", f"of={root_img2}",
-                                    "bs=512", f"skip={root_part['start']}", f"count={root_part['size']}",
-                                    "status=none"
-                                ], check=True)
-                            
-                            injected_any = False
-                            for extra_mod, extra_path in [
-                                ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
-                                ("sr_mod.ko", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko"),
-                                ("cdrom.ko", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko"),
-                                ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst"),
-                                ("sr_mod.ko.zst", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko.zst"),
-                                ("cdrom.ko.zst", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko.zst")
-                            ]:
-                                em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
-                                os.makedirs(os.path.dirname(em_dst), exist_ok=True)
-                                subprocess.run(
-                                    [debugfs_bin, "-R", f"dump {extra_path} {em_dst}", root_img2],
-                                    capture_output=True
-                                )
-                                if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
-                                    injected_any = True
-                                else:
-                                    if os.path.exists(em_dst):
-                                        os.remove(em_dst)
-
-                            if injected_any:
-                                depmod_bin = shutil.which("depmod")
-                                if depmod_bin:
-                                    subprocess.run([depmod_bin, "-b", initrd_work, kver], capture_output=True)
-                                    log_to_task(build_id, "[ISO] Generated modules.dep for micro-initrd")
-
-                                append_res = subprocess.run(
-                                    f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9 >> {initrd_dst}",
-                                    shell=True
-                                )
-                                if append_res.returncode == 0:
-                                    log_to_task(build_id, f"[ISO] Successfully appended ISO modules to initrd.img")
-                                else:
-                                    log_to_task(build_id, "[ISO WARNING] Failed to append micro-initrd to initrd.img")
+                        injected_any = False
+                        for extra_mod, extra_path in [
+                            ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
+                            ("sr_mod.ko", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko"),
+                            ("cdrom.ko", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko"),
+                            ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst"),
+                            ("sr_mod.ko.zst", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko.zst"),
+                            ("cdrom.ko.zst", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko.zst")
+                        ]:
+                            em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
+                            os.makedirs(os.path.dirname(em_dst), exist_ok=True)
+                            subprocess.run(
+                                [debugfs_bin, "-R", f"dump {extra_path} {em_dst}", root_img2],
+                                capture_output=True
+                            )
+                            if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
+                                injected_any = True
                             else:
-                                log_to_task(build_id, "[ISO WARNING] Could not find isofs/cdrom modules in rootfs to append.")
+                                if os.path.exists(em_dst):
+                                    os.remove(em_dst)
+
+                        if injected_any:
+                            depmod_bin = shutil.which("depmod")
+                            if depmod_bin:
+                                subprocess.run([depmod_bin, "-b", initrd_work, kver], capture_output=True)
+                                log_to_task(build_id, "[ISO] Generated modules.dep for micro-initrd")
+
+                            append_res = subprocess.run(
+                                f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9 >> {initrd_dst}",
+                                shell=True
+                            )
+                            if append_res.returncode == 0:
+                                log_to_task(build_id, f"[ISO] Successfully appended ISO modules to initrd.img")
+                            else:
+                                log_to_task(build_id, "[ISO WARNING] Failed to append micro-initrd to initrd.img")
+                        else:
+                            log_to_task(build_id, "[ISO WARNING] Could not find isofs/cdrom modules in rootfs to append.")
                     
                     shutil.rmtree(initrd_work, ignore_errors=True)
                 except Exception as patch_e:

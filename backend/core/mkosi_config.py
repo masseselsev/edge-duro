@@ -117,6 +117,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         with open(os.path.join(extra_apt_dir, "custom.list"), "w") as f:
             f.write("\n".join(sources_lines) + "\n")
 
+    # Force IPv4 for APT to prevent IPv6 blackhole hangs during package download
+    apt_conf_dir = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "apt.conf.d")
+    os.makedirs(apt_conf_dir, exist_ok=True)
+    with open(os.path.join(apt_conf_dir, "99force-ipv4"), "w") as f:
+        f.write('Acquire::ForceIPv4 "true";\n')
+
     config_lines = [
         "[Distribution]",
         f"Distribution={mkosi_distro}",

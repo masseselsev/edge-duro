@@ -282,9 +282,11 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
-            # Step 2: Build a SELF-CONTAINED installer initramfs (installer.cpio.gz)
-            # This initramfs runs entirely in RAM with its own /bin/sh (busybox) and /usr/bin/xz.
-            # It does NOT depend on initrd.img — no systemd, no switch_root, no rootfs needed.
+            # Step 2: Build the installer initramfs overlay (installer.cpio.gz).
+            # It provides /init (auto-installer), busybox, and xz. At boot time it is loaded
+            # by GRUB as a CHAINED initrd AFTER the system initrd.img, so the kernel unpacks
+            # initrd.img first (kernel modules, kmod) and then this overlay, whose /init wins.
+            # No systemd, no switch_root, no rootfs needed — everything runs in RAM.
             ramfs_dir = os.path.join(ws_path, "installer_ramfs")
             if os.path.exists(ramfs_dir):
                 shutil.rmtree(ramfs_dir)
@@ -365,7 +367,10 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Failed to copy xz libs: {e}")
 
-            # Write /init installer script
+            # Write /init installer script.
+            # NOTE: This /init is layered on top of the system initrd.img (initramfs-tools,
+            # MODULES=most) via GRUB chained initrd loading, so /lib/modules/$(uname -r) with
+            # the full driver set and /sbin/modprobe (kmod) are available at runtime.
             init_script_path = os.path.join(ramfs_dir, "init")
             with open(init_script_path, "w") as f:
                 f.write("""#!/bin/sh
@@ -376,38 +381,59 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs dev /dev
 
-# Wait for device nodes to settle
-sleep 3
-
 echo "===================================================="
 echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
 echo "===================================================="
 echo ""
 
+# Load kernel modules required to see CD-ROM/USB/SATA/NVMe/VirtIO media and
+# to mount ISO9660/VFAT boot media. Modules come from the chained system initrd.
+echo "[INSTALLER] Loading storage & filesystem kernel modules..."
+for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic pata_acpi \
+           usbcore xhci-hcd ehci-hcd uhci-hcd ohci-hcd usb-storage \
+           virtio virtio_ring virtio_pci virtio_blk virtio_scsi nvme-core nvme \
+           isofs fat vfat loop ext4; do
+    modprobe "$mod" 2>/dev/null || true
+done
+
+# Give devices time to settle (CD-ROM spinup, USB enumeration)
+sleep 3
+
 # Mount the ISO/USB boot media
 mkdir -p /mnt/cdrom
 MOUNTED=0
+BOOT_PART=""
 
-# Try mounting with explicit filesystem types and retry for slow CD-ROM spinup
+# try_mount <device> — mount read-only and verify our .raw.xz payload is present,
+# so we never mistake a target disk's data partition for the boot media.
+try_mount() {
+    dev="$1"
+    [ -b "$dev" ] || return 1
+    for fstype in iso9660 vfat; do
+        if mount -t "$fstype" -o ro "$dev" /mnt/cdrom 2>/dev/null; then
+            if ls /mnt/cdrom/*.raw.xz >/dev/null 2>&1; then
+                BOOT_PART="$dev"
+                return 0
+            fi
+            umount /mnt/cdrom 2>/dev/null
+        fi
+    done
+    return 1
+}
+
 ATTEMPTS=0
 while [ "$MOUNTED" = "0" ] && [ "$ATTEMPTS" -lt 5 ]; do
     ATTEMPTS=$((ATTEMPTS + 1))
 
-    # Try CD-ROM devices first (most common for ISO boot)
+    # CD-ROM devices first (most common for ISO boot)
     for dev in /dev/sr0 /dev/sr1; do
-        if [ -b "$dev" ]; then
-            mount -t iso9660 -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
-        fi
+        try_mount "$dev" && MOUNTED=1 && break
     done
 
-    # Try USB/SATA partitions
+    # USB/SATA whole disks (isohybrid dd-written sticks) and first partitions
     if [ "$MOUNTED" = "0" ]; then
-        for dev in /dev/sda1 /dev/sdb1 /dev/sdc1 /dev/sdd1; do
-            if [ -b "$dev" ]; then
-                mount -t iso9660 -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
-                mount -t vfat -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
-                mount -o ro "$dev" /mnt/cdrom 2>/dev/null && MOUNTED=1 && BOOT_PART="$dev" && break
-            fi
+        for dev in /dev/sda /dev/sdb /dev/sdc /dev/sdd /dev/sda1 /dev/sdb1 /dev/sdc1 /dev/sdd1; do
+            try_mount "$dev" && MOUNTED=1 && break
         done
     fi
 
@@ -419,12 +445,16 @@ done
 
 if [ "$MOUNTED" = "0" ]; then
     echo "[INSTALLER ERROR] Cannot mount boot media!"
+    echo "Loaded filesystems:"
+    cat /proc/filesystems
     echo "Available block devices:"
     ls -la /dev/sd* /dev/sr* /dev/nvme* 2>/dev/null
     echo ""
     echo "Dropping to emergency shell..."
     exec /bin/sh
 fi
+
+echo "[INSTALLER] Boot media mounted: $BOOT_PART"
 
 # Find the .raw.xz image on boot media
 RAW_XZ=$(ls /mnt/cdrom/edge_*.raw.xz /mnt/cdrom/*.raw.xz 2>/dev/null | head -n 1)
@@ -496,7 +526,11 @@ reboot -f
             installer_size = os.path.getsize(installer_cpio_path)
             log_to_task(build_id, f"[ISO] Built installer initramfs: {installer_size / 1024:.0f} KB")
 
-            # Write GRUB config — installer uses ONLY installer.cpio.gz, no initrd.img
+            # Write GRUB config — installer boots with CHAINED initrds:
+            # initrd.img (system initramfs-tools: kernel modules, kmod, udev) is unpacked first,
+            # then installer.cpio.gz (busybox+xz+our /init) overwrites /init so the auto-installer
+            # runs in RAM. This gives the installer kernel full access to iso9660/sr_mod/sd_mod/
+            # ahci/usb-storage/nvme/virtio drivers that match the booted kernel exactly.
             grub_cfg_path = os.path.join(iso_grub_dir, "grub.cfg")
             with open(grub_cfg_path, "w") as f:
                 f.write("""set default=0
@@ -505,7 +539,7 @@ set timeout=5
 menuentry "Edge OS Auto-Installer (Install to Target Disk)" {
     search --no-floppy --set=root --label DURO_BOOT
     linux /boot/vmlinuz console=ttyS0,115200 console=tty0
-    initrd /boot/installer.cpio.gz
+    initrd /boot/initrd.img /boot/installer.cpio.gz
 }
 
 menuentry "Edge OS Direct Disk Boot (edgeroot)" {

@@ -315,9 +315,9 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 lz4_idx = raw.find(b'\x02\x21\x4C\x18')
                                 
                                 valid_offsets = []
-                                if gz_idx > 0: valid_offsets.append((gz_idx, 'gz'))
-                                if zstd_idx > 0: valid_offsets.append((zstd_idx, 'zstd'))
-                                if lz4_idx > 0: valid_offsets.append((lz4_idx, 'lz4'))
+                                if gz_idx >= 0: valid_offsets.append((gz_idx, 'gz'))
+                                if zstd_idx >= 0: valid_offsets.append((zstd_idx, 'zstd'))
+                                if lz4_idx >= 0: valid_offsets.append((lz4_idx, 'lz4'))
                                 
                                 if valid_offsets:
                                     valid_offsets.sort(key=lambda x: x[0])

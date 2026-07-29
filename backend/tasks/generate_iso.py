@@ -480,8 +480,10 @@ for m in kernel/fs/isofs/isofs.ko kernel/drivers/scsi/sr_mod.ko kernel/drivers/c
     fi
 done
 
-# Now explicitly load isofs using the freshly updated text modules.dep
+# Now explicitly load the injected modules using the freshly updated text modules.dep
 modprobe isofs 2>/dev/null || true
+modprobe cdrom 2>/dev/null || true
+modprobe sr_mod 2>/dev/null || true
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"
 
 # Give devices time to settle (CD-ROM spinup, USB enumeration)

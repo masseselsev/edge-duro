@@ -317,27 +317,22 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 found_off = -1
                                 
                                 if idx >= 0:
-                                    # Archive starts on a 512-byte boundary after the trailer block
-                                    start_search = ((idx + len(trailer)) // 512) * 512
-                                    for i in range(start_search, len(raw), 512):
-                                        if raw[i:i+4] == b'\x28\xb5\x2f\xfd':
-                                            zstd_off = i
-                                            break
-                                        elif raw[i:i+3] == b'\x1f\x8b\x08':
-                                            gz_off = i
-                                            break
-                                            
-                                if gz_off >= 0:
-                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={gz_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                    found_off = gz_off
-                                elif zstd_off >= 0:
-                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={zstd_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                    found_off = zstd_off
-                                else:
-                                    break
-                                gz_off = found_off
+                                    # Find the first gzip or zstd magic byte after the trailer
+                                    gz_idx = raw.find(b'\x1f\x8b\x08', idx)
+                                    zstd_idx = raw.find(b'\x28\xb5\x2f\xfd', idx)
+                                    
+                                    found_off = -1
+                                    if gz_idx >= 0 and (zstd_idx < 0 or gz_idx < zstd_idx):
+                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={gz_idx} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                        found_off = gz_idx
+                                    elif zstd_idx >= 0:
+                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={zstd_idx} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                        found_off = zstd_idx
+                                    else:
+                                        break
+                                    gz_off = found_off
 
-                            res = subprocess.run(unpack_cmd, shell=True)
+                                res = subprocess.run(unpack_cmd, shell=True)
                             # Check if any kernel modules were extracted
                             lib_mods = os.path.join(initrd_work, "lib", "modules")
                             if os.path.isdir(lib_mods) and os.listdir(lib_mods):

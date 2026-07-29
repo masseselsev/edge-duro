@@ -8,7 +8,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
     """
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
-    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot", "initramfs-tools"]:
+    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
         if req_pkg not in pkgs:
             pkgs.append(req_pkg)
 
@@ -151,8 +151,14 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         "SkeletonTrees=mkosi.skeleton",
     ])
 
-    if recipe.kernel_params and recipe.kernel_params.strip():
-        config_lines.append(f"KernelCommandLine={recipe.kernel_params.strip()}")
+    # Always ensure fsck.mode=skip is present to prevent recovery mode on fresh images
+    kernel_params = (recipe.kernel_params or "").strip()
+    if kernel_params:
+        if "fsck.mode=skip" not in kernel_params and "fsck.mode" not in kernel_params:
+            kernel_params = f"{kernel_params} fsck.mode=skip"
+        if "quiet" not in kernel_params:
+            kernel_params = f"quiet loglevel=3 {kernel_params}"
+        config_lines.append(f"KernelCommandLine={kernel_params}")
     else:
         config_lines.append("KernelCommandLine=quiet loglevel=3 fsck.mode=skip console=ttyS0,115200 console=tty0 ipv6.disable=1 nohz=off")
 

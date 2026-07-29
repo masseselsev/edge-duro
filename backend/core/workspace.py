@@ -297,7 +297,7 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 3. Fix bash double bracket syntax in autosdk script if present
     if [ -f /opt/edge/share/etc/environment.d/02-autosdk.sh ]; then
-      sed -i 's/\[\[/\[/g; s/\]\]/\]/g' /opt/edge/share/etc/environment.d/02-autosdk.sh 2>/dev/null || true
+      sed -i 's/\\[\\[/\\[/g; s/\\]\\]/\\]/g' /opt/edge/share/etc/environment.d/02-autosdk.sh 2>/dev/null || true
     fi
 
     # 4. Convert strict 'set -e' to non-blocking 'set +e' in all postinst scripts for chroot build safety
@@ -351,6 +351,12 @@ rm -rf "$ROOT"/usr/lib/firmware/nvidia* "$ROOT"/usr/lib/firmware/amdgpu* "$ROOT"
 # 4. Ensure systemd-boot bootloader, vmlinuz, and initrd are prepared in /boot (ESP partition)
 echo "[POSTINST] Initializing systemd-boot and copying kernel/initrd into /boot..."
 if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
+  # Re-mount pseudo-filesystems for bootctl and update-initramfs to work correctly
+  mount -t proc proc "$ROOT/proc" 2>/dev/null || true
+  mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true
+  mount --bind /dev "$ROOT/dev" 2>/dev/null || true
+  mount -t devpts devpts "$ROOT/dev/pts" 2>/dev/null || true
+
   chroot "$ROOT" /bin/bash -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
     bootctl install --no-variables 2>/dev/null || true
@@ -358,6 +364,7 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
 
     # Ensure initramfs is generated with all required modules for VirtualBox/virtio
     if [ -n "$KVER" ] && command -v update-initramfs >/dev/null 2>&1; then
+      echo "[POSTINST] Adding virtio modules to initramfs-tools/modules..."
       echo "virtio_blk" >> /etc/initramfs-tools/modules 2>/dev/null || true
       echo "virtio_pci" >> /etc/initramfs-tools/modules 2>/dev/null || true
       echo "virtio_net" >> /etc/initramfs-tools/modules 2>/dev/null || true
@@ -369,7 +376,8 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
       echo "ahci" >> /etc/initramfs-tools/modules 2>/dev/null || true
       echo "sd_mod" >> /etc/initramfs-tools/modules 2>/dev/null || true
       echo "scsi_mod" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      update-initramfs -u -k "$KVER" 2>/dev/null || true
+      echo "[POSTINST] Regenerating initramfs for kernel $KVER with virtio modules..."
+      update-initramfs -u -k "$KVER" || true
     fi
 
     for f in /boot/vmlinuz-$KVER /boot/vmlinuz* /vmlinuz*; do
@@ -393,6 +401,12 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
     echo "initrd /initrd.img" >> /boot/loader/entries/edge.conf
     echo "options root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off" >> /boot/loader/entries/edge.conf
   ' || true
+
+  # Unmount pseudo-filesystems
+  umount "$ROOT/dev/pts" 2>/dev/null || true
+  umount "$ROOT/proc" 2>/dev/null || true
+  umount "$ROOT/sys" 2>/dev/null || true
+  umount -l "$ROOT/dev" 2>/dev/null || true
 fi
 """
     for hk in ["mkosi.postinst", "mkosi.finalize"]:

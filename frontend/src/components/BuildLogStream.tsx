@@ -46,30 +46,6 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     }
   };
 
-  const displayLogs = React.useMemo(() => {
-    if (logs.length === 0) return [];
-    const isProgressLine = (str: string): boolean => {
-      const clean = str.replace(/^\[.*?\]\s*/, '').trim();
-      if (!clean) return false;
-      return /repart-definitions|->.*?\d+(?:M|G|K|B)\/\d+|(?:^|\s)\d+%\s*$/i.test(clean) ||
-             /\b\d+(?:\.\d+)?(?:M|G|K|B)\/\d+(?:\.\d+)?(?:M|G|K|B)\b/i.test(clean);
-    };
-
-    const result: string[] = [];
-    for (const line of logs) {
-      if (!line) continue;
-      const bodyOnly = line.replace(/^\[.*?\]\s*/, '').trim();
-      if (!bodyOnly) continue;
-
-      if (result.length > 0 && isProgressLine(line) && isProgressLine(result[result.length - 1])) {
-        result[result.length - 1] = line;
-      } else {
-        result.push(line);
-      }
-    }
-    return result;
-  }, [logs]);
-
   useEffect(() => {
     if (isAtBottom && logContainerRef.current) {
       isAutoScrollingRef.current = true;
@@ -78,7 +54,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
         isAutoScrollingRef.current = false;
       });
     }
-  }, [displayLogs, isAtBottom]);
+  }, [logs, isAtBottom]);
 
   const scrollToBottom = () => {
     setIsAtBottom(true);
@@ -276,10 +252,10 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           onScroll={handleScroll}
           className="relative flex-1 p-5 overflow-y-auto font-mono text-xs text-zinc-300 space-y-1 bg-zinc-950 leading-relaxed"
         >
-          {displayLogs.length === 0 ? (
+          {logs.length === 0 ? (
             <div className="text-zinc-600 italic">Waiting for live build output stream...</div>
           ) : (
-            displayLogs.map((line, i) => (
+            logs.map((line, i) => (
               <div
                 key={i}
                 style={{ contentVisibility: 'auto', containIntrinsicSize: '0 20px' }}

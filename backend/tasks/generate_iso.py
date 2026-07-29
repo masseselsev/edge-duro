@@ -359,9 +359,15 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             if os.path.exists(ramfs_dir):
                 shutil.rmtree(ramfs_dir)
 
-            # Create minimal rootfs directory structure
-            for d in ["bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys", "mnt/cdrom", "tmp", "etc", "lib", "lib64"]:
+            # Setup busybox and basic tree for initramfs
+            for d in ["bin", "sbin", "usr/bin", "usr/sbin", "etc", "proc", "sys", "dev", "mnt", "mnt/cdrom", "mnt/target", "usr/lib", "usr/lib64"]:
                 os.makedirs(os.path.join(ramfs_dir, d), exist_ok=True)
+
+            # Ensure lib and lib64 are symlinks to usr/lib (usr-merge)
+            if not os.path.exists(os.path.join(ramfs_dir, "lib")):
+                os.symlink("usr/lib", os.path.join(ramfs_dir, "lib"))
+            if not os.path.exists(os.path.join(ramfs_dir, "lib64")):
+                os.symlink("usr/lib64", os.path.join(ramfs_dir, "lib64"))
 
             # Copy busybox-static (provides sh, mount, dd, ls, echo, cat, sleep, reboot, df, awk, sed, grep, etc.)
             busybox_src = shutil.which("busybox") or "/bin/busybox"
@@ -418,9 +424,9 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                         if lib_path and os.path.exists(lib_path) and not lib_path.startswith("linux-vdso"):
                             # Determine target directory based on lib path
                             if "x86_64" in lib_path or "64" in os.path.dirname(lib_path):
-                                target_dir = os.path.join(ramfs_dir, "lib64")
+                                target_dir = os.path.join(ramfs_dir, "usr", "lib64")
                             else:
-                                target_dir = os.path.join(ramfs_dir, "lib")
+                                target_dir = os.path.join(ramfs_dir, "usr", "lib")
                             os.makedirs(target_dir, exist_ok=True)
                             dst = os.path.join(target_dir, os.path.basename(lib_path))
                             if not os.path.exists(dst):
@@ -428,7 +434,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                     # Also copy the dynamic linker if present
                     for ld_path in ["/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"]:
                         if os.path.exists(ld_path):
-                            dst_dir = os.path.join(ramfs_dir, os.path.dirname(ld_path).lstrip("/"))
+                            dst_dir = os.path.join(ramfs_dir, "usr", os.path.dirname(ld_path).lstrip("/"))
                             os.makedirs(dst_dir, exist_ok=True)
                             dst = os.path.join(dst_dir, os.path.basename(ld_path))
                             if not os.path.exists(dst):

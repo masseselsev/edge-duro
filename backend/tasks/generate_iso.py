@@ -628,7 +628,7 @@ set timeout=5
 
 menuentry "Edge OS Auto-Installer (Install to Target Disk)" {
     search --no-floppy --set=root --label DURO_BOOT
-    linux /boot/vmlinuz console=ttyS0,115200 console=tty0
+    linux /boot/vmlinuz console=tty0 console=ttyS0,115200
     initrd /boot/initrd.img /boot/installer.cpio.gz
 }
 

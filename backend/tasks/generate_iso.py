@@ -339,11 +339,6 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                     os.remove(em_dst)
 
                         if injected_any:
-                            depmod_bin = shutil.which("depmod")
-                            if depmod_bin:
-                                subprocess.run([depmod_bin, "-b", initrd_work, kver], capture_output=True)
-                                log_to_task(build_id, "[ISO] Generated modules.dep for micro-initrd")
-
                             append_res = subprocess.run(
                                 f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9 >> {initrd_dst}",
                                 shell=True
@@ -464,8 +459,17 @@ echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
 echo "===================================================="
 echo ""
 
-# Load kernel modules required to see CD-ROM/USB/SATA/NVMe/VirtIO media and
-# to mount ISO9660/VFAT boot media. Modules come from the chained system initrd.
+# Dynamically register injected modules into modules.dep so modprobe can find them
+# We do this instead of running depmod which would overwrite the original modules.dep
+KVER=$(uname -r)
+for m in kernel/fs/isofs/isofs.ko kernel/drivers/scsi/sr_mod.ko kernel/drivers/cdrom/cdrom.ko; do
+    if [ -f "/lib/modules/$KVER/$m" ]; then
+        echo "$m:" >> "/lib/modules/$KVER/modules.dep"
+    elif [ -f "/lib/modules/$KVER/$m.zst" ]; then
+        echo "$m.zst:" >> "/lib/modules/$KVER/modules.dep"
+    fi
+done
+
 echo "[INSTALLER] Loading storage & filesystem kernel modules..."
 for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic pata_acpi \
            usbcore xhci_hcd ehci_hcd uhci_hcd ohci_hcd usb_storage \
@@ -473,20 +477,6 @@ for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic
            isofs fat vfat loop ext4; do
     modprobe "$mod" 2>/dev/null || true
 done
-
-# Fallback: if isofs still not loaded (not in chained initrd), try insmod from /sys/module path
-if ! grep -q iso9660 /proc/filesystems 2>/dev/null; then
-    KVER=$(uname -r)
-    for kmod_path in \
-        /lib/modules/$KVER/kernel/fs/isofs/isofs.ko \
-        /lib/modules/$KVER/kernel/fs/isofs/isofs.ko.xz \
-        /lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst; do
-        if [ -f "$kmod_path" ]; then
-            echo "[INSTALLER] Loading isofs via insmod: $kmod_path"
-            insmod "$kmod_path" 2>/dev/null && break
-        fi
-    done
-fi
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"
 
 # Give devices time to settle (CD-ROM spinup, USB enumeration)

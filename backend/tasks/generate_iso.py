@@ -132,7 +132,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             shutil.rmtree(iso_staging, ignore_errors=True)
             os.makedirs(iso_staging, exist_ok=True)
 
-            efi_img_path = os.path.join(iso_staging, "efi.img")
+            efi_img_path = os.path.join(ws_path, "esp_extracted.img")
             esp_extracted = False
             kernel_ready = False
 

@@ -306,19 +306,32 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                              f"zstd -d {initrd_dst} -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
                                 gz_off = 0
                             else:
-                                # Scan for gzip (\x1f\x8b) or zstd (\x28\xb5\x2f\xfd) magic after microcode cpio
+                                # Scan for cpio TRAILER!!! to skip uncompressed microcode
                                 with open(initrd_dst, 'rb') as ifh:
-                                    raw = ifh.read(4 * 1024 * 1024)  # read first 4MB
-                                gz_off = raw.find(b'\x1f\x8b', 512)
-                                zstd_off = raw.find(b'\x28\xb5\x2f\xfd', 512)
+                                    raw = ifh.read(16 * 1024 * 1024)  # read first 16MB
                                 
-                                if gz_off >= 0 and (zstd_off < 0 or gz_off < zstd_off):
-                                    # Gzip found
-                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} bs=1 skip={gz_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                trailer = b'TRAILER!!!'
+                                idx = raw.find(trailer)
+                                gz_off = -1
+                                zstd_off = -1
+                                found_off = -1
+                                
+                                if idx >= 0:
+                                    # Archive starts on a 512-byte boundary after the trailer block
+                                    start_search = ((idx + len(trailer)) // 512) * 512
+                                    for i in range(start_search, len(raw), 512):
+                                        if raw[i:i+4] == b'\x28\xb5\x2f\xfd':
+                                            zstd_off = i
+                                            break
+                                        elif raw[i:i+3] == b'\x1f\x8b\x08':
+                                            gz_off = i
+                                            break
+                                            
+                                if gz_off >= 0:
+                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={gz_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
                                     found_off = gz_off
                                 elif zstd_off >= 0:
-                                    # Zstd found
-                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} bs=1 skip={zstd_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={zstd_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
                                     found_off = zstd_off
                                 else:
                                     break

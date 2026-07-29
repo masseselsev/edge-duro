@@ -320,11 +320,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                         injected_any = False
                         for extra_mod, extra_path in [
                             ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
-                            ("sr_mod.ko", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko"),
-                            ("cdrom.ko", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko"),
-                            ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst"),
-                            ("sr_mod.ko.zst", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko.zst"),
-                            ("cdrom.ko.zst", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko.zst")
+                            ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst")
                         ]:
                             em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
                             os.makedirs(os.path.dirname(em_dst), exist_ok=True)
@@ -340,7 +336,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
 
                         if injected_any:
                             append_res = subprocess.run(
-                                f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9 >> {initrd_dst}",
+                                f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | zstd -19 >> {initrd_dst}",
                                 shell=True
                             )
                             if append_res.returncode == 0:
@@ -470,20 +466,14 @@ for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic
     modprobe "$mod" 2>/dev/null || true
 done
 
-# Dynamically register injected modules into modules.dep so modprobe can find them
+# Load isofs explicitly using insmod since we injected it
 KVER=$(uname -r)
-for m in kernel/fs/isofs/isofs.ko kernel/drivers/scsi/sr_mod.ko kernel/drivers/cdrom/cdrom.ko; do
-    if [ -f "/lib/modules/$KVER/$m" ]; then
-        echo "$m:" >> "/lib/modules/$KVER/modules.dep"
-    elif [ -f "/lib/modules/$KVER/$m.zst" ]; then
-        echo "$m.zst:" >> "/lib/modules/$KVER/modules.dep"
-    fi
-done
+if [ -f "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" ]; then
+    insmod "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" 2>/dev/null || true
+elif [ -f "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" ]; then
+    insmod "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" 2>/dev/null || true
+fi
 
-# Now explicitly load the injected modules using the freshly updated text modules.dep
-modprobe isofs 2>/dev/null || true
-modprobe cdrom 2>/dev/null || true
-modprobe sr_mod 2>/dev/null || true
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"
 
 # Give devices time to settle (CD-ROM spinup, USB enumeration)

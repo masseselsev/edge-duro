@@ -318,14 +318,16 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                         log_to_task(build_id, "[ISO WARNING] Could not determine kernel version from /lib/modules. Skipping isofs injection.")
                     else:
                         injected_any = False
-                        for extra_mod, extra_path in [
+                        for extra_mod, original_path in [
                             ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
                             ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst")
                         ]:
+                            # Replace /lib with /usr/lib to respect usrmerge in the micro-initrd
+                            extra_path = original_path.replace("/lib/modules/", "/usr/lib/modules/")
                             em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
                             os.makedirs(os.path.dirname(em_dst), exist_ok=True)
                             subprocess.run(
-                                [debugfs_bin, "-R", f"dump {extra_path} {em_dst}", root_img2],
+                                [debugfs_bin, "-R", f"dump {original_path} {em_dst}", root_img2],
                                 capture_output=True
                             )
                             if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
@@ -474,10 +476,10 @@ done
 
 # Load isofs explicitly using insmod since we injected it
 KVER=$(uname -r)
-if [ -f "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" ]; then
-    insmod "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" 2>/dev/null || true
-elif [ -f "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" ]; then
-    insmod "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" 2>/dev/null || true
+if [ -f "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" ]; then
+    insmod "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" 2>/dev/null || true
+elif [ -f "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" ]; then
+    insmod "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" 2>/dev/null || true
 fi
 
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"

@@ -125,7 +125,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
                     pct_match = re.search(r'(\d+)%', clean_line)
                     if pct_match:
                         pct = int(pct_match.group(1))
-                        if pct % 10 == 0 and pct != last_progress_pct:
+                        if pct % 5 == 0 and pct != last_progress_pct:
                             last_progress_pct = pct
                             log_to_task(build_id, clean_line)
                         continue

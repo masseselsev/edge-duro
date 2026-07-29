@@ -20,6 +20,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
 
     # Standard distribution packages only for mkosi base build (Edge packages are pre-downloaded and installed via dpkg)
     std_pkgs = [p for p in pkgs if not p.lower().startswith("edge-")]
+    
+    # Ensure dracut-core is installed so mkosi delegates initrd generation to it
+    # dracut builds non-hostonly initrds which include all generic storage modules (virtio_blk, etc)
+    if "dracut-core" not in std_pkgs:
+        std_pkgs.append("dracut-core")
+        
     packages_formatted = "\n    ".join(std_pkgs)
 
     arch_map = {

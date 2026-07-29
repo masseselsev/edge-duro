@@ -216,7 +216,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
                 log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({total_bytes} bytes) into {raw_xz_filename} using {cpu_threads} CPU threads...")
                 try:
                     import threading
-                    import time
+                    pass
 
                     xz_proc = subprocess.Popen(
                         ["nice", "-n", "19", "ionice", "-c", "3",

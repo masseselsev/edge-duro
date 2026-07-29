@@ -370,20 +370,15 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
     KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -n1)
 
     # Ensure initramfs is generated with all required modules for VirtualBox/virtio
+    # AND ISO installer boot (isofs/sr_mod/cdrom for CD-ROM boot media mounting)
     if [ -n "$KVER" ] && command -v update-initramfs >/dev/null 2>&1; then
-      echo "[POSTINST] Adding virtio modules to initramfs-tools/modules..."
-      echo "virtio_blk" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "virtio_pci" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "virtio_net" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "virtio_scsi" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "virtio_console" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "vfat" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "fat" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "ext4" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "ahci" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "sd_mod" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "scsi_mod" >> /etc/initramfs-tools/modules 2>/dev/null || true
-      echo "[POSTINST] Regenerating initramfs for kernel $KVER with virtio modules..."
+      echo "[POSTINST] Adding virtio + ISO boot modules to initramfs-tools/modules..."
+      for m in virtio_blk virtio_pci virtio_net virtio_scsi virtio_console \
+               vfat fat ext4 ahci sd_mod scsi_mod \
+               isofs sr_mod cdrom loop usbcore usb-storage; do
+        grep -qxF "$m" /etc/initramfs-tools/modules 2>/dev/null || echo "$m" >> /etc/initramfs-tools/modules
+      done
+      echo "[POSTINST] Regenerating initramfs for kernel $KVER with virtio+ISO modules..."
       update-initramfs -u -k "$KVER" || true
     fi
 

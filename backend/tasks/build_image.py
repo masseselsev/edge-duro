@@ -210,12 +210,52 @@ def build_image_task(self, build_id: str, recipe_id: int):
         if target_raw_file:
             if not target_raw_file.endswith(".xz"):
                 uncompressed_raw_path = target_raw_file
-                conc = int(os.getenv("CELERY_WORKER_CONCURRENCY", "2"))
-                cpu_threads = max(1, (os.cpu_count() or 2) // max(1, conc))
-                log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({os.path.getsize(target_raw_file)} bytes) into {raw_xz_filename} using {cpu_threads} CPU threads (concurrency quota)...")
+                total_bytes = os.path.getsize(target_raw_file)
+                # DEBUG: use 85% of CPUs while tuning; revert to conc-quota formula later
+                cpu_threads = max(1, int((os.cpu_count() or 2) * 0.85))
+                log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({total_bytes} bytes) into {raw_xz_filename} using {cpu_threads} CPU threads...")
                 try:
+                    import threading
+
+                    xz_proc = subprocess.Popen(
+                        ["nice", "-n", "19", "ionice", "-c", "3",
+                         "xz", "-c", "-3", f"-T{cpu_threads}", target_raw_file],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    last_pct_logged = -5
+                    written_bytes = 0
+
                     with open(final_raw_xz_path, "wb") as out_f:
-                        subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "xz", "-c", "-3", f"-T{cpu_threads}", target_raw_file], stdout=out_f, check=True)
+                        while True:
+                            chunk = xz_proc.stdout.read(4 * 1024 * 1024)  # 4 MB chunks
+                            if not chunk:
+                                break
+                            out_f.write(chunk)
+                            written_bytes += len(chunk)
+                            # Estimate input progress: xz typically compresses ~3:1 for disk images,
+                            # but we track output bytes as proxy. Better: read /proc to get stdin pos.
+                            # Use out_f.tell() vs expected_output as proxy is inaccurate.
+                            # Real approach: track input via /proc/<pid>/fdinfo
+                            try:
+                                fdinfo_path = f"/proc/{xz_proc.pid}/fdinfo/0"
+                                if os.path.exists(fdinfo_path):
+                                    with open(fdinfo_path) as fi:
+                                        for line in fi:
+                                            if line.startswith("pos:"):
+                                                pos = int(line.split()[1])
+                                                pct = min(99, int(pos * 100 / total_bytes))
+                                                if pct >= last_pct_logged + 5:
+                                                    last_pct_logged = pct
+                                                    log_to_task(build_id, f"[XZ] Compressing... {pct}% ({pos // 1024 // 1024} MB / {total_bytes // 1024 // 1024} MB read)")
+                                                break
+                            except Exception:
+                                pass
+
+                    xz_proc.wait()
+                    if xz_proc.returncode != 0:
+                        raise subprocess.CalledProcessError(xz_proc.returncode, "xz")
+                    log_to_task(build_id, f"[XZ] Compression complete: {os.path.getsize(final_raw_xz_path) // 1024 // 1024} MB written")
                 except Exception as e:
                     log_to_task(build_id, f"[WARNING] XZ compression failed ({e}), copying raw file...")
                     shutil.copy2(target_raw_file, final_raw_xz_path)

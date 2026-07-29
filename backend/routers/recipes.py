@@ -35,9 +35,9 @@ def create_recipe(
 
     recipe_data = payload.model_dump()
     if "repositories" in recipe_data:
-        recipe_data["repositories"] = [r if isinstance(r, dict) else r.dict() for r in payload.repositories]
+        recipe_data["repositories"] = [r if isinstance(r, dict) else r.model_dump() for r in payload.repositories]
     if "partitions" in recipe_data:
-        recipe_data["partitions"] = [p if isinstance(p, dict) else p.dict() for p in payload.partitions]
+        recipe_data["partitions"] = [p if isinstance(p, dict) else p.model_dump() for p in payload.partitions]
 
     recipe = models.Recipe(**recipe_data)
     db.add(recipe)
@@ -81,9 +81,9 @@ def update_recipe(
     update_data = payload.model_dump()
     for key, value in update_data.items():
         if key == "repositories":
-            setattr(recipe, key, [r if isinstance(r, dict) else r.dict() for r in payload.repositories])
+            setattr(recipe, key, [r if isinstance(r, dict) else r.model_dump() for r in payload.repositories])
         elif key == "partitions":
-            setattr(recipe, key, [p if isinstance(p, dict) else p.dict() for p in payload.partitions])
+            setattr(recipe, key, [p if isinstance(p, dict) else p.model_dump() for p in payload.partitions])
         else:
             setattr(recipe, key, value)
 
@@ -152,11 +152,16 @@ def clone_recipe(
         packages=original.packages,
         repositories=original.repositories,
         hostname=original.hostname,
+        hostname_from_netif=original.hostname_from_netif,
+        timezone=original.timezone,
         network_config=original.network_config,
         ssh_keys=original.ssh_keys,
+        kernel_params=original.kernel_params,
+        partitions=original.partitions,
         raw_mkosi_conf=original.raw_mkosi_conf,
         raw_preseed_cfg=original.raw_preseed_cfg,
-        raw_postinst=original.raw_postinst
+        raw_postinst=original.raw_postinst,
+        raw_firstboot=original.raw_firstboot
     )
 
     db.add(cloned)

@@ -267,7 +267,7 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
   mount --bind /dev "$ROOT/dev" 2>/dev/null || true
 
   chroot "$ROOT" /bin/bash -c "
-    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
     ln -sf /bin/bash /bin/sh
     mkdir -p /opt/edge/venv/bin /opt/edge/bin /usr/bin
     if [ ! -f /opt/edge/venv/bin/python3.14 ]; then
@@ -302,9 +302,9 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
 
     # 4. Convert strict 'set -e' to non-blocking 'set +e' in all postinst scripts for chroot build safety
     for pscript in /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.preinst; do
-      if [ -f \"\$pscript\" ]; then
-        sed -i 's/^set -e/set +e/g' \"\$pscript\" 2>/dev/null || true
-        sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' \"\$pscript\" 2>/dev/null || true
+      if [ -f \"\\$pscript\" ]; then
+        sed -i 's/^set -e/set +e/g' \"\\$pscript\" 2>/dev/null || true
+        sed -i 's|/opt/edge/bin/ctrl-cli|/bin/true|g' \"\\$pscript\" 2>/dev/null || true
       fi
     done
 

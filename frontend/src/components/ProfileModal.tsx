@@ -34,7 +34,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
     }
 
     try {
-      const res = await fetch('/api/auth/me', {
+      const res = await fetch('/api/users/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -222,6 +222,26 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
           )}
 
           <div className="flex items-center gap-2">
+            {hasRaw && (
+              <a
+                href={`/api/builds/${buildId}/download?format=raw_xz`}
+                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                title="Download compressed RAW.XZ image"
+              >
+                <Download size={13} />
+                <span>RAW.XZ</span>
+              </a>
+            )}
+            {hasIso && (
+              <a
+                href={`/api/builds/${buildId}/download?format=iso`}
+                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                title="Download bootable ISO image"
+              >
+                <Disc size={13} />
+                <span>ISO</span>
+              </a>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"

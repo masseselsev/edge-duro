@@ -8,7 +8,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
     """
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
-    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot"]:
+    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot", "initramfs-tools"]:
         if req_pkg not in pkgs:
             pkgs.append(req_pkg)
 
@@ -80,8 +80,6 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
             "acpi-support-base": "",
             "acpi-support": "",
             "intel-media-va-driver-non-free": "intel-media-va-driver",
-            "systemd-sysv": "",
-            "coreutils": "",
         }
         remove_files = COMMON_REMOVE_FILES
     else:

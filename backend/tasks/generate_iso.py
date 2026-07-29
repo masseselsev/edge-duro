@@ -459,8 +459,18 @@ echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "
 echo "===================================================="
 echo ""
 
+# Load storage kernel modules first, BEFORE touching modules.dep,
+# because writing to modules.dep invalidates the binary modules.dep.bin
+# and prevents further modprobes of original modules like virtio_blk!
+echo "[INSTALLER] Loading storage & filesystem kernel modules..."
+for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic pata_acpi \
+           usbcore xhci_hcd ehci_hcd uhci_hcd ohci_hcd usb_storage \
+           virtio virtio_ring virtio_pci virtio_blk virtio_scsi nvme_core nvme \
+           fat vfat loop ext4; do
+    modprobe "$mod" 2>/dev/null || true
+done
+
 # Dynamically register injected modules into modules.dep so modprobe can find them
-# We do this instead of running depmod which would overwrite the original modules.dep
 KVER=$(uname -r)
 for m in kernel/fs/isofs/isofs.ko kernel/drivers/scsi/sr_mod.ko kernel/drivers/cdrom/cdrom.ko; do
     if [ -f "/lib/modules/$KVER/$m" ]; then
@@ -470,13 +480,8 @@ for m in kernel/fs/isofs/isofs.ko kernel/drivers/scsi/sr_mod.ko kernel/drivers/c
     fi
 done
 
-echo "[INSTALLER] Loading storage & filesystem kernel modules..."
-for mod in cdrom sr_mod scsi_mod sd_mod libata libahci ahci ata_piix ata_generic pata_acpi \
-           usbcore xhci_hcd ehci_hcd uhci_hcd ohci_hcd usb_storage \
-           virtio virtio_ring virtio_pci virtio_blk virtio_scsi nvme_core nvme \
-           isofs fat vfat loop ext4; do
-    modprobe "$mod" 2>/dev/null || true
-done
+# Now explicitly load isofs using the freshly updated text modules.dep
+modprobe isofs 2>/dev/null || true
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"
 
 # Give devices time to settle (CD-ROM spinup, USB enumeration)

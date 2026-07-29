@@ -282,166 +282,74 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             except Exception as e:
                 log_to_task(build_id, f"[ISO WARNING] Partition extraction failed: {e}")
 
-            # Step 1b: Patch initrd.img to ensure isofs.ko is present.
-            # The system initrd built by initramfs-tools with MODULES=most does NOT include
-            # isofs.ko (it's not needed to mount rootfs). We inject it directly so the
-            # installer /init can modprobe isofs and mount the ISO9660 CD-ROM.
+            # Step 1b: Append required ISO boot modules to initrd.img.
+            # Mkosi 25 places kernel modules in an appended initrd, which breaks standard cpio unpacking.
+            # Instead of unpacking, we simply build a micro-initrd with just isofs/cdrom modules and
+            # append it to the end of initrd.img. The Linux kernel parses appended initrds natively.
             initrd_dst = os.path.join(iso_boot_dir, "initrd.img")
             if has_initrd and os.path.exists(initrd_dst):
                 try:
-                    log_to_task(build_id, "[ISO] Checking initrd.img for isofs.ko kernel module...")
+                    log_to_task(build_id, "[ISO] Creating and appending micro-initrd with ISO kernel modules...")
                     initrd_work = os.path.join(ws_path, "initrd_work")
                     shutil.rmtree(initrd_work, ignore_errors=True)
                     os.makedirs(initrd_work, exist_ok=True)
 
-                    # Detect format: initrd may be gzip, zstd, or concatenated (microcode + gzip)
-                    
-                    # Find the gzip/zstd offset (skip microcode cpio prepended by initramfs-tools)
-                    # Strategy: use cpio --to-stdout to extract; if it fails, try with offset scan
-                    unpack_ok = False
-                    for skip_bytes in [0, None]:
-                        try:
-                            if skip_bytes == 0:
-                                unpack_cmd = f"cd {initrd_work} && zcat {initrd_dst} 2>/dev/null | cpio -id --quiet 2>/dev/null || " \
-                                             f"zstd -d {initrd_dst} -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                gz_off = 0
-                            else:
-                                # Scan for compression magic bytes directly to skip uncompressed microcode
-                                with open(initrd_dst, 'rb') as ifh:
-                                    raw = ifh.read(16 * 1024 * 1024)  # read first 16MB
-                                
-                                gz_idx = raw.find(b'\x1f\x8b\x08')
-                                zstd_idx = raw.find(b'\x28\xb5\x2f\xfd')
-                                lz4_idx = raw.find(b'\x02\x21\x4C\x18')
-                                
-                                valid_offsets = []
-                                if gz_idx >= 0: valid_offsets.append((gz_idx, 'gz'))
-                                if zstd_idx >= 0: valid_offsets.append((zstd_idx, 'zstd'))
-                                if lz4_idx >= 0: valid_offsets.append((lz4_idx, 'lz4'))
-                                
-                                if valid_offsets:
-                                    valid_offsets.sort(key=lambda x: x[0])
-                                    found_off, comp_type = valid_offsets[0]
-                                    
-                                    if comp_type == 'gz':
-                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                    elif comp_type == 'zstd':
-                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                    elif comp_type == 'lz4':
-                                        unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} iflag=skip_bytes bs=4M skip={found_off} 2>/dev/null | lz4 -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
-                                    gz_off = found_off
-                                else:
-                                    break
-
-                                res = subprocess.run(unpack_cmd, shell=True)
-                            # Check if any kernel modules were extracted
-                            lib_mods = os.path.join(initrd_work, "lib", "modules")
-                            if os.path.isdir(lib_mods) and os.listdir(lib_mods):
-                                unpack_ok = True
-                                log_to_task(build_id, f"[ISO] initrd.img unpacked successfully (offset={gz_off if skip_bytes is None else 0})")
-                                break
-                        except Exception as ue:
-                            log_to_task(build_id, f"[ISO] initrd unpack attempt failed: {ue}")
-
-                    if unpack_ok:
-                        # Find kernel version from the extracted modules directory
-                        lib_mods = os.path.join(initrd_work, "lib", "modules")
-                        kver_dirs = [d for d in os.listdir(lib_mods) if os.path.isdir(os.path.join(lib_mods, d))]
-                        kver = kver_dirs[0] if kver_dirs else ""
-
-                        # Check if isofs.ko already present (any compression variant)
-                        isofs_present = False
-                        if kver:
-                            for root_, dirs_, files_ in os.walk(os.path.join(lib_mods, kver)):
-                                if any(f.startswith("isofs.ko") for f in files_):
-                                    isofs_present = True
-                                    break
-
-                        if not isofs_present:
-                            log_to_task(build_id, f"[ISO] isofs.ko NOT found in initrd (kver={kver}). Extracting from rootfs partition...")
-                            # Extract isofs.ko from rootfs partition via debugfs
-                            debugfs_bin = shutil.which("debugfs")
-                            if debugfs_bin and len(partitions_info) > 1 and kver:
-                                root_part = partitions_info[1]
-                                root_img2 = os.path.join(ws_path, "root_part2.img")
-                                try:
-                                    subprocess.run([
-                                        "dd", f"if={target_raw}", f"of={root_img2}",
-                                        "bs=512", f"skip={root_part['start']}", f"count={root_part['size']}",
-                                        "status=none"
-                                    ], check=True)
-                                    # Find isofs.ko path inside rootfs
-                                    find_res = subprocess.run(
-                                        [debugfs_bin, "-R", f"ls -l /lib/modules/{kver}/kernel/fs/isofs", root_img2],
-                                        capture_output=True, text=True
-                                    )
-                                    isofs_ko_name = None
-                                    for ln in find_res.stdout.splitlines():
-                                        if "isofs.ko" in ln:
-                                            isofs_ko_name = ln.strip().split()[-1]
-                                            break
-
-                                    if isofs_ko_name:
-                                        isofs_target_dir = os.path.join(initrd_work, "lib", "modules", kver, "kernel", "fs", "isofs")
-                                        os.makedirs(isofs_target_dir, exist_ok=True)
-                                        isofs_dst_path = os.path.join(isofs_target_dir, isofs_ko_name)
-                                        subprocess.run(
-                                            [debugfs_bin, "-R",
-                                             f"dump /lib/modules/{kver}/kernel/fs/isofs/{isofs_ko_name} {isofs_dst_path}",
-                                             root_img2],
-                                            capture_output=True
-                                        )
-                                        if os.path.exists(isofs_dst_path) and os.path.getsize(isofs_dst_path) > 0:
-                                            log_to_task(build_id, f"[ISO] Injected {isofs_ko_name} ({os.path.getsize(isofs_dst_path)} bytes) into initrd")
-                                            # Also extract sr_mod and cdrom modules
-                                            for extra_mod, extra_path in [
-                                                ("sr_mod.ko", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko"),
-                                                ("cdrom.ko", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko"),
-                                            ]:
-                                                em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
-                                                os.makedirs(os.path.dirname(em_dst), exist_ok=True)
-                                                subprocess.run(
-                                                    [debugfs_bin, "-R", f"dump {extra_path} {em_dst}", root_img2],
-                                                    capture_output=True
-                                                )
-                                                if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
-                                                    log_to_task(build_id, f"[ISO] Also injected {extra_mod} into initrd")
-
-                                            # Rebuild modules.dep inside the initrd using depmod
-                                            depmod_bin = shutil.which("depmod")
-                                            if depmod_bin:
-                                                subprocess.run(
-                                                    [depmod_bin, "-b", initrd_work, kver],
-                                                    capture_output=True
-                                                )
-                                                log_to_task(build_id, "[ISO] Rebuilt modules.dep in patched initrd")
-
-                                            # Repack the patched initrd
-                                            new_initrd_path = initrd_dst + ".patched"
-                                            repack_res = subprocess.run(
-                                                f"cd {initrd_work} && find . | cpio -o -H newc 2>/dev/null | gzip -9 > {new_initrd_path}",
-                                                shell=True
-                                            )
-                                            if repack_res.returncode == 0 and os.path.exists(new_initrd_path) and os.path.getsize(new_initrd_path) > 0:
-                                                shutil.move(new_initrd_path, initrd_dst)
-                                                log_to_task(build_id, f"[ISO] Patched initrd.img written ({os.path.getsize(initrd_dst) / 1024 / 1024:.1f} MB) — isofs.ko injected")
-                                        else:
-                                            log_to_task(build_id, "[ISO WARNING] isofs.ko not found in rootfs /lib/modules/ — mount may fail")
-                                    else:
-                                        log_to_task(build_id, "[ISO WARNING] isofs.ko directory not found in rootfs")
-                                except Exception as ie:
-                                    log_to_task(build_id, f"[ISO WARNING] isofs.ko injection failed: {ie}")
-                                finally:
-                                    if os.path.exists(root_img2):
-                                        try:
-                                            os.remove(root_img2)
-                                        except Exception:
-                                            pass
-                        else:
-                            log_to_task(build_id, f"[ISO] isofs.ko already present in initrd — no patching needed")
+                    # Find kernel version from vmlinuz filename
+                    kver = ""
+                    if vmlinuz_src_name and "-" in vmlinuz_src_name:
+                        kver = vmlinuz_src_name.replace("vmlinuz-", "")
+                    if not kver:
+                        log_to_task(build_id, f"[ISO WARNING] Could not determine kernel version from vmlinuz name '{vmlinuz_src_name}'. Skipping isofs injection.")
                     else:
-                        log_to_task(build_id, "[ISO WARNING] Could not unpack initrd.img for patching — skipping isofs injection")
+                        debugfs_bin = shutil.which("debugfs")
+                        if debugfs_bin and len(partitions_info) > 1:
+                            root_part = partitions_info[1]
+                            root_img2 = os.path.join(ws_path, "root_part2.img")
+                            if not os.path.exists(root_img2):
+                                subprocess.run([
+                                    "dd", f"if={target_raw}", f"of={root_img2}",
+                                    "bs=512", f"skip={root_part['start']}", f"count={root_part['size']}",
+                                    "status=none"
+                                ], check=True)
+                            
+                            injected_any = False
+                            for extra_mod, extra_path in [
+                                ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
+                                ("sr_mod.ko", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko"),
+                                ("cdrom.ko", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko"),
+                                ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst"),
+                                ("sr_mod.ko.zst", f"/lib/modules/{kver}/kernel/drivers/scsi/sr_mod.ko.zst"),
+                                ("cdrom.ko.zst", f"/lib/modules/{kver}/kernel/drivers/cdrom/cdrom.ko.zst")
+                            ]:
+                                em_dst = os.path.join(initrd_work, extra_path.lstrip("/"))
+                                os.makedirs(os.path.dirname(em_dst), exist_ok=True)
+                                subprocess.run(
+                                    [debugfs_bin, "-R", f"dump {extra_path} {em_dst}", root_img2],
+                                    capture_output=True
+                                )
+                                if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
+                                    injected_any = True
+                                else:
+                                    if os.path.exists(em_dst):
+                                        os.remove(em_dst)
 
+                            if injected_any:
+                                depmod_bin = shutil.which("depmod")
+                                if depmod_bin:
+                                    subprocess.run([depmod_bin, "-b", initrd_work, kver], capture_output=True)
+                                    log_to_task(build_id, "[ISO] Generated modules.dep for micro-initrd")
+
+                                append_res = subprocess.run(
+                                    f"cd {initrd_work} && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9 >> {initrd_dst}",
+                                    shell=True
+                                )
+                                if append_res.returncode == 0:
+                                    log_to_task(build_id, f"[ISO] Successfully appended ISO modules to initrd.img")
+                                else:
+                                    log_to_task(build_id, "[ISO WARNING] Failed to append micro-initrd to initrd.img")
+                            else:
+                                log_to_task(build_id, "[ISO WARNING] Could not find isofs/cdrom modules in rootfs to append.")
+                    
                     shutil.rmtree(initrd_work, ignore_errors=True)
                 except Exception as patch_e:
                     log_to_task(build_id, f"[ISO WARNING] initrd patching failed: {patch_e}")

@@ -295,10 +295,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                     os.makedirs(initrd_work, exist_ok=True)
 
                     # Detect format: initrd may be gzip, zstd, or concatenated (microcode + gzip)
-                    # Use 'file' to detect, then skip leading bytes if needed
-                    file_res = subprocess.run(["file", initrd_dst], capture_output=True, text=True)
-                    file_out = file_res.stdout.lower()
-
+                    
                     # Find the gzip/zstd offset (skip microcode cpio prepended by initramfs-tools)
                     # Strategy: use cpio --to-stdout to extract; if it fails, try with offset scan
                     unpack_ok = False
@@ -307,14 +304,26 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                             if skip_bytes == 0:
                                 unpack_cmd = f"cd {initrd_work} && zcat {initrd_dst} 2>/dev/null | cpio -id --quiet 2>/dev/null || " \
                                              f"zstd -d {initrd_dst} -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                gz_off = 0
                             else:
-                                # Scan for gzip magic (\x1f\x8b) after potential microcode cpio section
+                                # Scan for gzip (\x1f\x8b) or zstd (\x28\xb5\x2f\xfd) magic after microcode cpio
                                 with open(initrd_dst, 'rb') as ifh:
                                     raw = ifh.read(4 * 1024 * 1024)  # read first 4MB
                                 gz_off = raw.find(b'\x1f\x8b', 512)
-                                if gz_off < 0:
+                                zstd_off = raw.find(b'\x28\xb5\x2f\xfd', 512)
+                                
+                                if gz_off >= 0 and (zstd_off < 0 or gz_off < zstd_off):
+                                    # Gzip found
+                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} bs=1 skip={gz_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                    found_off = gz_off
+                                elif zstd_off >= 0:
+                                    # Zstd found
+                                    unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} bs=1 skip={zstd_off} 2>/dev/null | zstd -d -c 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                    found_off = zstd_off
+                                else:
                                     break
-                                unpack_cmd = f"cd {initrd_work} && dd if={initrd_dst} bs=1 skip={gz_off} 2>/dev/null | zcat 2>/dev/null | cpio -id --quiet 2>/dev/null"
+                                gz_off = found_off
+
                             res = subprocess.run(unpack_cmd, shell=True)
                             # Check if any kernel modules were extracted
                             lib_mods = os.path.join(initrd_work, "lib", "modules")

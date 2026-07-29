@@ -109,7 +109,19 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
       .then((res) => res.json())
       .then((data) => {
         if (data.log_output && updateLogs) {
-          setLogs(data.log_output.split('\n').filter((l: string) => l.length > 0));
+          const rawLines = data.log_output.split('\n');
+          const finalLines: string[] = [];
+          rawLines.forEach((l: string) => {
+             if (!l) return;
+             if (l.startsWith('\r')) {
+                 const content = l.substring(1);
+                 if (finalLines.length > 0) finalLines[finalLines.length - 1] = content;
+                 else finalLines.push(content);
+             } else {
+                 finalLines.push(l);
+             }
+          });
+          setLogs(finalLines);
         }
         if (data.status) {
           setStatus(data.status);
@@ -134,7 +146,14 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
     const eventSource = new EventSource(`/api/builds/${buildId}/stream`);
 
     eventSource.addEventListener('log', (event: MessageEvent) => {
-      setLogs((prev) => [...prev, event.data]);
+      setLogs((prev) => {
+        const isUpdate = event.data.startsWith('\r');
+        const newData = isUpdate ? event.data.substring(1) : event.data;
+        if (isUpdate && prev.length > 0) {
+          return [...prev.slice(0, -1), newData];
+        }
+        return [...prev, newData];
+      });
       if (event.data.includes('[ISO SUCCESS]')) {
         setHasIso(true);
       }

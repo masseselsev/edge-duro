@@ -216,6 +216,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
                 log_to_task(build_id, f"Compressing raw disk image '{os.path.basename(target_raw_file)}' ({total_bytes} bytes) into {raw_xz_filename} using {cpu_threads} CPU threads...")
                 try:
                     import threading
+                    import time
 
                     xz_proc = subprocess.Popen(
                         ["nice", "-n", "19", "ionice", "-c", "3",
@@ -223,17 +224,10 @@ def build_image_task(self, build_id: str, recipe_id: int):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,
                     )
-                    last_pct_logged = -5
-                    written_bytes = 0
 
-                    with open(final_raw_xz_path, "wb") as out_f:
-                        while True:
-                            chunk = xz_proc.stdout.read(4 * 1024 * 1024)  # 4 MB chunks
-                            if not chunk:
-                                break
-                            out_f.write(chunk)
-                            written_bytes += len(chunk)
-                            # Track input progress by finding the fd xz has open on the source file
+                    def progress_monitor():
+                        last_pct_logged = -5
+                        while xz_proc.poll() is None:
                             try:
                                 fd_dir = f"/proc/{xz_proc.pid}/fd"
                                 if os.path.isdir(fd_dir):
@@ -249,15 +243,24 @@ def build_image_task(self, build_id: str, recipe_id: int):
                                                             pct = min(99, int(pos * 100 / total_bytes))
                                                             if pct >= last_pct_logged + 5:
                                                                 last_pct_logged = pct
-                                                                log_to_task(build_id, f"[XZ] Compressing... {pct}% ({pos // 1024 // 1024} MB / {total_bytes // 1024 // 1024} MB read)")
+                                                                is_update = pct > 0  # Replace line if not the first 0% log
+                                                                log_to_task(build_id, f"[XZ] Compressing... {pct}% ({pos // 1024 // 1024} MB / {total_bytes // 1024 // 1024} MB read)", replace_last=is_update)
                                                             break
                                                 break
                                         except (OSError, ValueError):
                                             pass
                             except Exception:
                                 pass
+                            time.sleep(2)
+
+                    monitor_thread = threading.Thread(target=progress_monitor, daemon=True)
+                    monitor_thread.start()
+
+                    with open(final_raw_xz_path, "wb") as out_f:
+                        shutil.copyfileobj(xz_proc.stdout, out_f, length=4 * 1024 * 1024)
 
                     xz_proc.wait()
+                    monitor_thread.join(timeout=2.0)
                     if xz_proc.returncode != 0:
                         raise subprocess.CalledProcessError(xz_proc.returncode, "xz")
                     log_to_task(build_id, f"[XZ] Compression complete: {os.path.getsize(final_raw_xz_path) // 1024 // 1024} MB written")

@@ -41,7 +41,7 @@ def _get_tz_name() -> str:
     return _tz_cache["name"]
 
 
-def log_to_task(task_id: str, message: str, status: str = None) -> None:
+def log_to_task(task_id: str, message: str, status: str = None, replace_last: bool = False) -> None:
     if not message or not message.strip():
         return
 
@@ -56,6 +56,8 @@ def log_to_task(task_id: str, message: str, status: str = None) -> None:
         timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     log_line = f"[{timestamp_str}] {message}"
+    if replace_last:
+        log_line = "\r" + log_line
 
     # 1. Publish to Redis PubSub INSTANTLY (<0.05ms, zero DB locks!)
     try:

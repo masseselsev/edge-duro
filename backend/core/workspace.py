@@ -19,6 +19,7 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
         "mkosi.extra/etc/apt/trusted.gpg.d",
         "mkosi.extra/root/.ssh",
         "mkosi.extra/etc/network/interfaces.d",
+        "mkosi.extra/etc/initramfs-tools",
         "mkosi.extra/opt/custom"
     ]
 
@@ -33,6 +34,12 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
 
     for d in subdirs:
         os.makedirs(os.path.join(recipe_ws, d), exist_ok=True)
+
+    # Ensure initramfs-tools includes ISO9660 and CD-ROM modules in generated initrd
+    initramfs_modules_file = os.path.join(recipe_ws, "mkosi.extra/etc/initramfs-tools/modules")
+    with open(initramfs_modules_file, "w") as f:
+        f.write("# Required storage & filesystem kernel modules for Edge OS Installer\n"
+                "isofs\nsr_mod\ncdrom\nvfat\next4\nsd_mod\nahci\nloop\noverlay\n")
 
     repart_dir = os.path.join(recipe_ws, "mkosi.repart")
     if os.path.exists(repart_dir):

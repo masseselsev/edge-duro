@@ -315,13 +315,14 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                 "mdev", "switch_root", "find", "xargs", "wc", "tr", "cut",
                 "blkid", "fdisk", "mkswap", "swapon", "swapoff", "free",
                 "ps", "kill", "test", "[", "true", "false", "expr",
+                "modprobe", "insmod", "lsmod", "rmmod",
             ]
             for applet in busybox_applets:
                 link_path = os.path.join(ramfs_dir, "bin", applet)
                 if not os.path.exists(link_path):
                     os.symlink("busybox", link_path)
             # Also link into /sbin
-            for applet in ["reboot", "poweroff", "halt", "mdev", "switch_root", "blkid", "fdisk"]:
+            for applet in ["reboot", "poweroff", "halt", "mdev", "switch_root", "blkid", "fdisk", "modprobe", "insmod"]:
                 link_path = os.path.join(ramfs_dir, "sbin", applet)
                 if not os.path.exists(link_path):
                     os.symlink("../bin/busybox", link_path)
@@ -409,9 +410,9 @@ BOOT_PART=""
 try_mount() {
     dev="$1"
     [ -b "$dev" ] || return 1
-    for fstype in iso9660 vfat; do
-        if mount -t "$fstype" -o ro "$dev" /mnt/cdrom 2>/dev/null; then
-            if ls /mnt/cdrom/*.raw.xz >/dev/null 2>&1; then
+    for fstype in iso9660 vfat auto; do
+        if mount -t "$fstype" -o ro "$dev" /mnt/cdrom 2>/dev/null || mount -o ro "$dev" /mnt/cdrom 2>/dev/null; then
+            if ls /mnt/cdrom/*.raw.xz >/dev/null 2>&1 || ls /mnt/cdrom/edge_*.raw.xz >/dev/null 2>&1; then
                 BOOT_PART="$dev"
                 return 0
             fi

@@ -200,10 +200,14 @@ def build_image_task(self, build_id: str, recipe_id: int):
         rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
         ts_suffix = datetime.utcnow().strftime('%y%m%d-%H%M')
 
+        # Dev builds are named edge-dev_* so they can never be mistaken for a
+        # release artifact once both are sitting in the same outputs directory.
+        prefix = "edge-dev" if (recipe and recipe.is_dev) else "edge"
+
         if edge_base_ver:
-            raw_xz_filename = f"edge_{edge_base_ver}_{arch}-{rel}_{ts_suffix}.raw.xz"
+            raw_xz_filename = f"{prefix}_{edge_base_ver}_{arch}-{rel}_{ts_suffix}.raw.xz"
         else:
-            raw_xz_filename = f"edge_{arch}-{rel}_{ts_suffix}.raw.xz"
+            raw_xz_filename = f"{prefix}_{arch}-{rel}_{ts_suffix}.raw.xz"
 
         final_raw_xz_path = os.path.join(outputs_dir, raw_xz_filename)
 

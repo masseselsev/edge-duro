@@ -117,10 +117,14 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         rel = (recipe.release if recipe and recipe.release else "bookworm").lower()
         ts_suffix = datetime.utcnow().strftime('%y%m%d-%H%M')
 
+        # Dev builds are named edge-dev_* so they can never be mistaken for a
+        # release artifact once both are sitting in the same outputs directory.
+        prefix = "edge-dev" if (recipe and recipe.is_dev) else "edge"
+
         if edge_base_ver:
-            iso_filename = f"edge_{edge_base_ver}_{arch}-{rel}_{ts_suffix}.iso"
+            iso_filename = f"{prefix}_{edge_base_ver}_{arch}-{rel}_{ts_suffix}.iso"
         else:
-            iso_filename = f"edge_{arch}-{rel}_{ts_suffix}.iso"
+            iso_filename = f"{prefix}_{arch}-{rel}_{ts_suffix}.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
         log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")

@@ -57,6 +57,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [partitions, setPartitions] = useState<Partition[]>(recipe?.partitions && recipe.partitions.length > 0 ? recipe.partitions : DEFAULT_EDGE_BOX_PARTITIONS);
   const [hostname, setHostname] = useState(recipe?.hostname || 'edge-node');
   const [hostnameFromNetif, setHostnameFromNetif] = useState<boolean>(recipe?.hostname_from_netif || false);
+  const [isDev, setIsDev] = useState<boolean>(recipe?.is_dev || false);
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
@@ -102,6 +103,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       partitions,
       hostname: hostname.trim() || 'edge-node',
       hostname_from_netif: hostnameFromNetif,
+      is_dev: isDev,
       timezone: timezone || 'UTC',
       ssh_keys: parsedKeys,
       ssh_port: sshPort,
@@ -222,6 +224,34 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
             </div>
           </div>
+
+          {/* Development build marker: renames artifacts to edge-dev_* */}
+          <label
+            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer select-none transition-colors ${
+              isDev
+                ? 'bg-fuchsia-500/10 border-fuchsia-500/40'
+                : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={isDev}
+              onChange={(e) => setIsDev(e.target.checked)}
+              className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-fuchsia-500 focus:ring-fuchsia-500/20"
+            />
+            <span className="flex-1">
+              <span className={`block text-xs font-bold uppercase tracking-wider ${isDev ? 'text-fuchsia-400' : 'text-zinc-400'}`}>
+                {t('devBuild') || 'Development Build'}
+              </span>
+              <span className="block text-[11px] text-zinc-400 mt-0.5">
+                {t('devBuildHint') || 'Marks this recipe as a dev build. Artifacts are named'}{' '}
+                <code className={`font-mono ${isDev ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
+                  {isDev ? 'edge-dev_' : 'edge_'}
+                </code>
+                {'…'} so dev images cannot be confused with release ones.
+              </span>
+            </span>
+          </label>
 
           <BaseImageSelector
             distribution={distribution}

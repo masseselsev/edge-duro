@@ -160,6 +160,7 @@ class RecipeBase(BaseModel):
     ssh_port: int = Field(default=2222, ge=1, le=65535)
     root_password: Optional[str] = None
     users: List[UserAccountSchema] = Field(default_factory=list)
+    is_dev: bool = Field(default=False)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
     partitions: List[PartitionSchema] = Field(default_factory=lambda: [
         {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},

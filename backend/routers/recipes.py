@@ -159,6 +159,7 @@ def clone_recipe(
         ssh_port=getattr(original, 'ssh_port', 2222) or 2222,
         root_password=original.root_password,
         users=original.users,
+        is_dev=original.is_dev,
         kernel_params=original.kernel_params,
         partitions=original.partitions,
         raw_mkosi_conf=original.raw_mkosi_conf,

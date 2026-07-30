@@ -68,6 +68,10 @@ class Recipe(Base):
     # [{"username": "user", "password": "...", "groups": ["sudo"], "shell": "/bin/bash"}]
     users = Column(JSON, nullable=False, default=list)
 
+    # Marks development builds. Artifacts are named edge-dev_* instead of edge_*
+    # so a dev image can never be mistaken for a release one on a shared share.
+    is_dev = Column(Boolean, default=False, nullable=False)
+
     kernel_params = Column(String, nullable=True)
     partitions = Column(JSON, nullable=False, default=list)
     raw_mkosi_conf = Column(Text, nullable=True)

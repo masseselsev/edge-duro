@@ -185,7 +185,7 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         config_lines.append(f"RemoveFiles=\n    {remove_files_formatted}")
 
     config_lines.extend([
-        "Autologin=yes",
+        "Autologin=no",
         "SkeletonTrees=mkosi.skeleton",
     ])
 

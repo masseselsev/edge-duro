@@ -366,7 +366,26 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
 
   chroot "$ROOT" /bin/bash -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-    bootctl install --no-variables 2>/dev/null || true
+    # Install the bootloader into /boot, not the bootctl default of /efi. The
+    # ESP repart definition copies /boot into the ESP root (CopyFiles=/boot:/),
+    # so anything bootctl writes to /efi never reaches the ESP -- which left the
+    # installed disk with no /EFI/BOOT/BOOTX64.EFI and made UEFI firmware report
+    # "No bootable option or device was found" once the install ISO was removed.
+    bootctl install --esp-path=/boot --no-variables 2>/dev/null || true
+
+    # bootctl may refuse a non-FAT --esp-path, so place the EFI binaries
+    # directly as well. Both destinations are what UEFI firmware looks for:
+    # EFI/BOOT/BOOT<arch>.EFI is the removable-media fallback path.
+    mkdir -p /boot/EFI/BOOT /boot/EFI/systemd
+    for sb in /usr/lib/systemd/boot/efi/systemd-boot*.efi; do
+      [ -f "$sb" ] || continue
+      cp -f "$sb" /boot/EFI/systemd/ 2>/dev/null || true
+      sb_arch=$(basename "$sb" .efi | sed s/^systemd-boot//)
+      sb_upper=$(echo "$sb_arch" | tr "[:lower:]" "[:upper:]")
+      cp -f "$sb" "/boot/EFI/BOOT/BOOT$sb_upper.EFI" 2>/dev/null || true
+      echo "[POSTINST] Installed $sb as /boot/EFI/BOOT/BOOT$sb_upper.EFI"
+    done
+
     KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -n1)
 
     # Ensure initramfs is generated with all required modules for VirtualBox/virtio
@@ -394,14 +413,44 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
         break
       fi
     done
+    # Point the loader entry at kernel/initrd paths that actually exist in the
+    # ESP. The plain /boot/vmlinuz copy above is not always produced, and an
+    # entry referencing a missing file makes systemd-boot fail on its default
+    # entry, so prefer the versioned names and fall back to the plain ones.
+    KIMG=""
+    IIMG=""
+    if [ -f "/boot/vmlinuz-$KVER" ]; then
+      KIMG="/vmlinuz-$KVER"
+    elif [ -f /boot/vmlinuz ]; then
+      KIMG="/vmlinuz"
+    fi
+    if [ -f "/boot/initrd.img-$KVER" ]; then
+      IIMG="/initrd.img-$KVER"
+    elif [ -f /boot/initrd.img ]; then
+      IIMG="/initrd.img"
+    fi
+
     mkdir -p /boot/loader/entries
-    echo "default edge.conf" > /boot/loader/loader.conf
-    echo "timeout 3" >> /boot/loader/loader.conf
+    echo "timeout 3" > /boot/loader/loader.conf
     echo "console-mode max" >> /boot/loader/loader.conf
-    echo "title Edge OS" > /boot/loader/entries/edge.conf
-    echo "linux /vmlinuz" >> /boot/loader/entries/edge.conf
-    echo "initrd /initrd.img" >> /boot/loader/entries/edge.conf
-    echo "options root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off" >> /boot/loader/entries/edge.conf
+    if [ -n "$KIMG" ] && [ -n "$IIMG" ]; then
+      echo "default edge.conf" >> /boot/loader/loader.conf
+      echo "title Edge OS" > /boot/loader/entries/edge.conf
+      echo "linux $KIMG" >> /boot/loader/entries/edge.conf
+      echo "initrd $IIMG" >> /boot/loader/entries/edge.conf
+      echo "options root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off" >> /boot/loader/entries/edge.conf
+      echo "[POSTINST] Loader entry edge.conf -> linux $KIMG, initrd $IIMG"
+    else
+      # No loose kernel/initrd: drop the entry and let systemd-boot
+      # auto-discover the UKI that mkosi generated in EFI/Linux.
+      rm -f /boot/loader/entries/edge.conf
+      echo "[POSTINST] WARNING: no kernel/initrd in /boot (KVER=$KVER); relying on UKI in EFI/Linux"
+    fi
+
+    echo "[POSTINST] ESP staging /boot contents:"
+    ls -la /boot 2>/dev/null || true
+    echo "[POSTINST] ESP staging /boot/EFI/BOOT contents:"
+    ls -la /boot/EFI/BOOT 2>/dev/null || true
   ' || true
 
   # Unmount pseudo-filesystems

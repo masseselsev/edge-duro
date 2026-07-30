@@ -60,6 +60,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
+  const [sshPort, setSshPort] = useState<number>(recipe?.ssh_port ?? 2222);
   const [rootPassword, setRootPassword] = useState(recipe?.root_password || '');
   const [users, setUsers] = useState<UserAccount[]>(recipe?.users || []);
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
@@ -103,6 +104,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       hostname_from_netif: hostnameFromNetif,
       timezone: timezone || 'UTC',
       ssh_keys: parsedKeys,
+      ssh_port: sshPort,
       root_password: rootPassword.trim() || null,
       users,
       kernel_params: kernelParams.trim() || null,
@@ -297,16 +299,30 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             </div>
           </div>
 
-          {/* SSH Keys */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshKeys')}</label>
-            <textarea
-              rows={3}
-              value={sshKeyInput}
-              onChange={(e) => setSshKeyInput(e.target.value)}
-              placeholder={t('sshKeyPlaceholder')}
-              className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
-            />
+          {/* SSH Configuration: Keys + Custom SSH Port */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2 space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshKeys')}</label>
+              <textarea
+                rows={3}
+                value={sshKeyInput}
+                onChange={(e) => setSshKeyInput(e.target.value)}
+                placeholder={t('sshKeyPlaceholder')}
+                className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshPort')}</label>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={sshPort}
+                onChange={(e) => setSshPort(parseInt(e.target.value) || 2222)}
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+              />
+              <p className="text-[11px] text-zinc-500">{t('sshPortHint')}</p>
+            </div>
           </div>
 
           {/* Credentials: root password + additional login accounts */}

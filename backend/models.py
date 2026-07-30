@@ -58,6 +58,7 @@ class Recipe(Base):
     timezone = Column(String, default="UTC", nullable=False)
     network_config = Column(JSON, nullable=True)
     ssh_keys = Column(JSON, nullable=False, default=list)
+    ssh_port = Column(Integer, nullable=False, default=2222)
 
     # Credentials. Passwords may be supplied in plaintext or already hashed
     # (any crypt(3) string, e.g. "$6$..."); they are hashed by chpasswd during

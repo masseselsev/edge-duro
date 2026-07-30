@@ -214,6 +214,7 @@ log "DONE"
             repositories=repos_spec,
             hostname="edge-node",
             ssh_keys=[],
+            ssh_port=2222,
             kernel_params="ipv6.disable=1 nohz=off",
             raw_mkosi_conf="",
             raw_preseed_cfg=preseed_content,

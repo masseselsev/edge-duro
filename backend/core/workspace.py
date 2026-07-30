@@ -113,13 +113,25 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     """
     extra_dir = os.path.join(workspace_path, "mkosi.extra")
 
-    # 1. SSH Keys
+    # 1. SSH Keys & Custom SSH Port
     if recipe.ssh_keys:
         ssh_dir = os.path.join(extra_dir, "root", ".ssh")
         os.makedirs(ssh_dir, exist_ok=True)
         auth_keys_path = os.path.join(ssh_dir, "authorized_keys")
         with open(auth_keys_path, "w") as f:
             f.write("\n".join(recipe.ssh_keys) + "\n")
+
+    ssh_port = getattr(recipe, 'ssh_port', 2222) or 2222
+    sshd_conf_dir = os.path.join(extra_dir, "etc", "ssh", "sshd_config.d")
+    os.makedirs(sshd_conf_dir, exist_ok=True)
+    with open(os.path.join(sshd_conf_dir, "port.conf"), "w") as f:
+        f.write(f"Port {ssh_port}\n")
+
+    # systemd ssh.socket drop-in for socket-activated sshd
+    ssh_sock_dir = os.path.join(extra_dir, "etc", "systemd", "system", "ssh.socket.d")
+    os.makedirs(ssh_sock_dir, exist_ok=True)
+    with open(os.path.join(ssh_sock_dir, "port.conf"), "w") as f:
+        f.write(f"[Socket]\nListenStream=\nListenStream={ssh_port}\n")
 
     # 1.5. Static Hostname Overlay and /etc/fstab
     etc_dir = os.path.join(extra_dir, "etc")

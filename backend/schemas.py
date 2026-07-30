@@ -157,6 +157,7 @@ class RecipeBase(BaseModel):
     timezone: str = Field(default="UTC")
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
+    ssh_port: int = Field(default=2222, ge=1, le=65535)
     root_password: Optional[str] = None
     users: List[UserAccountSchema] = Field(default_factory=list)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"

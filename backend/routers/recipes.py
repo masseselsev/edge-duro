@@ -156,6 +156,7 @@ def clone_recipe(
         timezone=original.timezone,
         network_config=original.network_config,
         ssh_keys=original.ssh_keys,
+        ssh_port=getattr(original, 'ssh_port', 2222) or 2222,
         root_password=original.root_password,
         users=original.users,
         kernel_params=original.kernel_params,

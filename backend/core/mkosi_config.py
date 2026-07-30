@@ -8,7 +8,14 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
     """
     pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
-    for req_pkg in ["apt", "bash", "coreutils", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
+    # "login" provides /bin/login, which agetty execs by default for BOTH manual
+    # getty prompts and Autologin=yes (mkosi's autologin unit still shells out to
+    # it with -f). With WithRecommends=no nothing pulls it in as a dependency of
+    # systemd/bash/coreutils, so every console -- autologin or manual -- exec()s
+    # a binary that doesn't exist: agetty prints the login prompt, the user types
+    # a name, Enter is echoed by the kernel tty layer, and then nothing, because
+    # there is no process left to read it.
+    for req_pkg in ["apt", "bash", "coreutils", "login", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
         if req_pkg not in pkgs:
             pkgs.append(req_pkg)
 

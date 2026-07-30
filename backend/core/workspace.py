@@ -451,6 +451,21 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
     ls -la /boot 2>/dev/null || true
     echo "[POSTINST] ESP staging /boot/EFI/BOOT contents:"
     ls -la /boot/EFI/BOOT 2>/dev/null || true
+
+    # mkosi'"'"'s Autologin=yes writes getty overrides ending in a bare "$TERM"
+    # token (see getty@tty1.service.d and console-getty.service.d). That is
+    # only meaningful under systemd-nspawn, which imports TERM from the host;
+    # on a real boot (this disk image booted as a VM/bare metal) nothing ever
+    # sets TERM in PID 1'"'"'s environment, so agetty inherits an undefined
+    # terminal type. Force a known-good "linux" TERM so autologin does not
+    # depend on that substitution succeeding.
+    for gdrop in /etc/systemd/system/getty@tty1.service.d/*.conf \
+                 /etc/systemd/system/console-getty.service.d/*.conf; do
+      [ -f "$gdrop" ] || continue
+      sed -i "s/ \\$TERM/ linux/" "$gdrop"
+      grep -q "^Environment=TERM=" "$gdrop" || sed -i "/^\\[Service\\]/a Environment=TERM=linux" "$gdrop"
+      echo "[POSTINST] Pinned TERM=linux in $gdrop"
+    done
   ' || true
 
   # Unmount pseudo-filesystems

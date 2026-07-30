@@ -103,7 +103,10 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
           >
             {/* Mount Point */}
             <div className="sm:col-span-3">
-              <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+              <label
+                title={t('mountPointHint') || 'Where this partition is mounted in the running system, e.g. / or /var/log/edge. Must match an entry generated in /etc/fstab.'}
+                className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+              >
                 {t('mountPoint') || 'Mount Point'}
               </label>
               <input
@@ -117,7 +120,10 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
 
             {/* Type */}
             <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+              <label
+                title={t('partitionTypeHint') || 'esp = EFI System Partition, required for UEFI boot. root = the / filesystem. generic = any other mount. swap = swap space.'}
+                className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+              >
                 {t('partitionType') || 'Type'}
               </label>
               <select
@@ -134,7 +140,10 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
 
             {/* Filesystem */}
             <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+              <label
+                title={t('fileSystemHint') || 'Filesystem to format the partition with. vfat is required for the ESP; swap has no filesystem.'}
+                className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+              >
                 {t('fileSystem') || 'Filesystem'}
               </label>
               <select
@@ -152,7 +161,10 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
 
             {/* Size */}
             <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+              <label
+                title={t('partitionSizeHint') || 'e.g. 512M, 8G. Use "max" on the LAST partition to take all remaining disk space -- only meaningful there.'}
+                className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+              >
                 {t('partitionSize') || 'Size'}
               </label>
               <input
@@ -166,7 +178,10 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
 
             {/* Label */}
             <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+              <label
+                title={t('partitionLabelHint') || 'Filesystem label, e.g. edgeroot. Referenced by /etc/fstab and the boot entry (root=LABEL=...), so it must be unique on the disk.'}
+                className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+              >
                 {t('partitionLabel') || 'Label'}
               </label>
               <input
@@ -206,6 +221,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             value={newMount}
             onChange={(e) => setNewMount(e.target.value)}
             placeholder="/var/custom"
+            title="Mount point for the new partition, e.g. /var/custom"
             className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
           />
 
@@ -237,6 +253,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             value={newSize}
             onChange={(e) => setNewSize(e.target.value)}
             placeholder="1G / max"
+            title='Size, e.g. 1G. "max" only makes sense on the last partition.'
             className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
           />
 
@@ -245,6 +262,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="Label (optional)"
+            title="Filesystem label, referenced by fstab and the boot entry. Must be unique on the disk."
             className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
           />
         </div>

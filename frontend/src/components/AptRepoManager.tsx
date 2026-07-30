@@ -63,6 +63,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                 <input
                   type="text"
                   placeholder={t('repoName')}
+                  title={t('repoNameHint') || 'Label only, used to identify this repo in the picker and logs. Not part of the APT source itself.'}
                   value={repo.name}
                   onChange={(e) => handleUpdate(idx, 'name', e.target.value)}
                   className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono"
@@ -70,6 +71,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                 <input
                   type="text"
                   placeholder={t('repoUrl')}
+                  title={t('repoUrlHint') || 'Base repository URL, e.g. https://edge.vitcompany.com/repo/bookworm/stable'}
                   value={repo.url}
                   onChange={(e) => handleUpdate(idx, 'url', e.target.value)}
                   className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono sm:col-span-2"
@@ -78,6 +80,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                   <input
                     type="text"
                     placeholder={t('repoSuite')}
+                    title={t('repoSuiteHint') || "Suite/codename, e.g. bookworm or resolute. Leave empty to fall back to this recipe's Release."}
                     value={repo.suite}
                     onChange={(e) => handleUpdate(idx, 'suite', e.target.value)}
                     className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono"

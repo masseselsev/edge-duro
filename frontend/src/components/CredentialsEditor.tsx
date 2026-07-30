@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { KeyRound, Plus, Trash2, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import FieldLabel from './FieldLabel';
 
 export interface UserAccount {
   username: string;
@@ -77,9 +78,14 @@ export default function CredentialsEditor({
 
       {/* Root password */}
       <div className="space-y-1.5">
-        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+        <FieldLabel
+          hint={
+            t('rootPasswordHint') ||
+            'Plaintext, or a pre-hashed crypt(3) string starting with $6$/$5$/etc. Installed with chpasswd during the build, so the image never stores a plaintext password. Leave empty to keep root locked (SSH keys / console autologin only).'
+          }
+        >
           {t('rootPassword') || 'Root Password'}
-        </label>
+        </FieldLabel>
         <div className="relative">
           <input
             type={showRoot ? 'text' : 'password'}
@@ -118,7 +124,13 @@ export default function CredentialsEditor({
               className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/80 items-start hover:border-slate-700 transition-colors animate-modal-in"
             >
               <div className="sm:col-span-3">
-                <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+                <label
+                  title={
+                    t('usernameHint') ||
+                    'Lowercase letters, digits, underscore or hyphen; must start with a letter or underscore.'
+                  }
+                  className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+                >
                   {t('username') || 'Username'}
                 </label>
                 <input
@@ -130,7 +142,13 @@ export default function CredentialsEditor({
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+                <label
+                  title={
+                    t('userPasswordHint') ||
+                    'Plaintext or a pre-hashed $6$... string, same rules as the root password above.'
+                  }
+                  className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+                >
                   {t('password') || 'Password'}
                 </label>
                 <input
@@ -143,7 +161,13 @@ export default function CredentialsEditor({
               </div>
 
               <div className="sm:col-span-3">
-                <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+                <label
+                  title={
+                    t('userGroupsHint') ||
+                    'Comma-separated, no spaces, e.g. sudo,video,plugdev. Groups that do not exist yet are created automatically.'
+                  }
+                  className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+                >
                   {t('userGroups') || 'Groups'}
                 </label>
                 <input
@@ -197,7 +221,13 @@ export default function CredentialsEditor({
       <div className="p-3.5 rounded-xl bg-slate-900/40 border border-dashed border-slate-800">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
           <div className="sm:col-span-4">
-            <label className="block text-[10px] uppercase font-semibold text-slate-500 mb-1">
+            <label
+              title={
+                t('usernameHint') ||
+                'Lowercase letters, digits, underscore or hyphen; must start with a letter or underscore.'
+              }
+              className="block text-[10px] uppercase font-semibold text-slate-500 mb-1 cursor-help"
+            >
               {t('username') || 'Username'}
             </label>
             <input

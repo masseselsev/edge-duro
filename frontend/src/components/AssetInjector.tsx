@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, FileText, Trash2, CheckCircle, FileCode } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import FieldLabel from './FieldLabel';
 
 interface AssetInjectorProps {
   recipeId?: number;
@@ -56,9 +57,14 @@ export default function AssetInjector({ recipeId, assets, onUpload, onDelete }: 
 
   return (
     <div className="space-y-4">
-      <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+      <FieldLabel
+        hint={
+          t('assetsHint') ||
+          'Upload extra files (.deb, scripts, binaries) to bake into the image. .deb packages are always copied to Overlay Path; enable the Post-Install Hook checkbox to also have them installed/executed automatically during the build.'
+        }
+      >
         {t('assets')}
-      </label>
+      </FieldLabel>
 
       {/* Target & Hook Options */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
@@ -67,9 +73,19 @@ export default function AssetInjector({ recipeId, assets, onUpload, onDelete }: 
           value={targetPath}
           onChange={(e) => setTargetPath(e.target.value)}
           placeholder={t('targetPath')}
+          title={
+            t('targetPathHint') ||
+            'Destination path inside the built image, e.g. /etc/custom.conf. Leave empty to place the file under /opt/custom/<filename> instead.'
+          }
           className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono focus:border-amber-500"
         />
-        <label className="flex items-center gap-2 text-xs text-zinc-300 font-bold cursor-pointer">
+        <label
+          title={
+            t('postInstallHint') ||
+            'Also run this asset automatically during the build (in the chroot, after packages are installed): .deb files are installed with dpkg -i, everything else is made executable and run.'
+          }
+          className="flex items-center gap-2 text-xs text-zinc-300 font-bold cursor-pointer"
+        >
           <input
             type="checkbox"
             checked={isPostinst}

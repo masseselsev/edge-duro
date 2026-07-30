@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Package, Cpu, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import FieldLabel from './FieldLabel';
 
 interface PackageSelectorProps {
   packages: string[];
@@ -82,9 +83,15 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
               <Cpu size={16} />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+              <FieldLabel
+                colorClassName="text-cyan-400"
+                hint={
+                  t('edgePackagesHint') ||
+                  'edge-* packages are fetched directly from your configured repositories and installed with dpkg during the build, bypassing normal APT dependency resolution.'
+                }
+              >
                 {t('edgePackagesTitle') || 'EDGE PLATFORM PACKAGES & DEPENDENCIES'}
-              </h4>
+              </FieldLabel>
               <p className="text-[11px] text-zinc-400">
                 {t('edgePackagesSubtitle') || 'Core Edge platform suite and mandatory runtime dependencies'}
               </p>
@@ -172,9 +179,15 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
               <Package size={16} />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+              <FieldLabel
+                colorClassName="text-amber-400"
+                hint={
+                  t('standardPackagesHint') ||
+                  'Regular distribution packages, resolved and installed by APT during the build with automatic dependency resolution -- unlike edge-* packages above.'
+                }
+              >
                 {t('standardPackagesTitle') || 'STANDARD SYSTEM & CUSTOM APT PACKAGES'}
-              </h4>
+              </FieldLabel>
               <p className="text-[11px] text-zinc-400">
                 General distribution utilities, drivers, and user application packages
               </p>

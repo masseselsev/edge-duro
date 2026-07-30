@@ -12,6 +12,7 @@ import PartitionEditor, { Partition, DEFAULT_EDGE_BOX_PARTITIONS } from './Parti
 import CredentialsEditor, { UserAccount } from './CredentialsEditor';
 import RepoBrowserModal from './RepoBrowserModal';
 import { SearchableSelect } from './SearchableSelect';
+import FieldLabel from './FieldLabel';
 
 interface RecipeBuilderModalProps {
   recipe?: any;
@@ -88,7 +89,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [rootPassword, setRootPassword] = useState(recipe?.root_password || '');
   const [users, setUsers] = useState<UserAccount[]>(recipe?.users || []);
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
-  const [rawPreseedCfg, setRawPreseedCfg] = useState(recipe?.raw_preseed_cfg || '');
+  // preseed.cfg has no editor anymore (mkosi never reads it), but an existing
+  // recipe's stored value is preserved unchanged rather than wiped on save.
+  const [rawPreseedCfg] = useState(recipe?.raw_preseed_cfg || '');
   const [rawPostinst, setRawPostinst] = useState(recipe?.raw_postinst || '');
   const [rawFirstboot, setRawFirstboot] = useState(recipe?.raw_firstboot || '');
   const [kernelParams, setKernelParams] = useState(recipe?.kernel_params || 'ipv6.disable=1 nohz=off');
@@ -227,7 +230,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           {/* Basic Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('recipeName')}</label>
+              <FieldLabel hint={t('recipeNameHint') || 'Unique name identifying this recipe. Shown in the recipe list; has no effect on the built image itself.'}>
+                {t('recipeName')}
+              </FieldLabel>
               <input
                 type="text"
                 required
@@ -238,7 +243,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('recipeDescription')}</label>
+              <FieldLabel hint={t('recipeDescriptionHint') || 'Optional free-text notes about this recipe. Not used by the build.'}>
+                {t('recipeDescription')}
+              </FieldLabel>
               <input
                 type="text"
                 value={description}
@@ -290,7 +297,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
 
           {/* Output Formats */}
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('outputFormats')}</label>
+            <FieldLabel hint={t('outputFormatsHint') || '.raw.xz is the flashable disk image itself. .iso is a bootable auto-installer that dd\'s that same image onto a target disk, then removes/ejects the media and powers off.'}>
+              {t('outputFormats')}
+            </FieldLabel>
             <div className="flex gap-3">
               {[
                 { id: 'raw_xz', label: '.raw.xz (Native Disk Image)' },
@@ -352,7 +361,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           {/* Hostname & Target OS Timezone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('hostname')}</label>
+              <FieldLabel hint={t('hostnameHint') || 'Static hostname baked into the image. Ignored at boot if the MAC-address checkbox below is enabled — that overwrites it on first boot instead.'}>
+                {t('hostname')}
+              </FieldLabel>
               <input
                 type="text"
                 value={hostname}
@@ -372,15 +383,17 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               </label>
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">Target OS Timezone</label>
+              <FieldLabel hint={t('timezoneHint') || 'IANA timezone name (e.g. Europe/Kyiv). Applied to /etc/localtime and /etc/timezone during the build.'}>
+                Target OS Timezone
+              </FieldLabel>
               <SearchableSelect
                 options={TIMEZONES}
                 value={timezone}
                 onChange={setTimezone}
               />
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pt-2">
+              <FieldLabel className="pt-2" hint={t('systemLocaleHint') || 'System LANG. C.UTF-8/C/POSIX are built into glibc and need nothing extra; any other locale requires the "locales" package and is compiled with locale-gen during the build.'}>
                 {t('systemLocale') || 'System Locale'}
-              </label>
+              </FieldLabel>
               <SearchableSelect
                 options={LOCALES}
                 value={locale}
@@ -392,7 +405,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           {/* SSH Configuration: Keys + Custom SSH Port */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2 space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshKeys')}</label>
+              <FieldLabel hint={t('sshKeysHint') || 'One public key per line (ed25519 or rsa). Installed into /root/.ssh/authorized_keys — do not paste a private key here.'}>
+                {t('sshKeys')}
+              </FieldLabel>
               <textarea
                 rows={3}
                 value={sshKeyInput}
@@ -402,7 +417,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('sshPort')}</label>
+              <FieldLabel hint={t('sshPortHintTip') || 'TCP port sshd listens on. Change this if 22/2222 must stay free for something else on the deployed device.'}>
+                {t('sshPort')}
+              </FieldLabel>
               <input
                 type="number"
                 min={1}
@@ -425,9 +442,9 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
 
           {/* Kernel Parameters (CMDLINE) */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+            <FieldLabel hint={t('kernelParamsHint') || 'Extra space-separated kernel boot arguments, e.g. "quiet loglevel=3". root=, rw, fsck.mode= and console= are added automatically unless you already specify an equivalent, so overriding console= here will not produce duplicates.'}>
               Kernel Parameters (CMDLINE)
-            </label>
+            </FieldLabel>
             <input
               type="text"
               value={kernelParams}
@@ -439,12 +456,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
 
           <AdvancedEditor
             rawMkosiConf={rawMkosiConf}
-            rawPreseedCfg={rawPreseedCfg}
-            rawPostinst={rawPostinst}
             rawFirstboot={rawFirstboot}
             onChangeMkosi={setRawMkosiConf}
-            onChangePreseed={setRawPreseedCfg}
-            onChangePostinst={setRawPostinst}
             onChangeFirstboot={setRawFirstboot}
           />
         </form>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Terminal } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import FieldLabel from './FieldLabel';
 
 interface ScriptManagerProps {
   postinstScript: string;
@@ -14,9 +15,14 @@ export default function ScriptManager({ postinstScript, onChange }: ScriptManage
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Terminal size={15} className="text-amber-400" />
-        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+        <FieldLabel
+          hint={
+            t('postinstHint') ||
+            'Shell commands that run once, inside a chroot of the rootfs, during the BUILD (not on the deployed device). Use it for one-off setup baked into the image: enabling a service, writing a config file, etc.'
+          }
+        >
           Post-Install Shell Hook (`mkosi.postinst.chroot`)
-        </label>
+        </FieldLabel>
       </div>
 
       <textarea

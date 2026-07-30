@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle, XCircle } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeBuilderModal from './RecipeBuilderModal';
 
@@ -78,6 +78,18 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
       console.error(err);
     } finally {
       setTriggeringId(null);
+    }
+  };
+
+  const handleCancelBuild = async (buildId: string) => {
+    try {
+      const res = await fetch(`/api/builds/${buildId}/cancel`, { method: 'POST' });
+      if (res.ok) {
+        fetchActiveBuilds();
+        fetchRecipes();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -187,14 +199,23 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                 {/* Card Footer Actions */}
                 <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between gap-2">
                   {activeBuild ? (
-                    <button
-                      onClick={() => onBuildTriggered(activeBuild.id, recipe.name)}
-                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer animate-pulse"
-                      title="Click to view live build console"
-                    >
-                      <Terminal size={14} />
-                      <span>Build Console</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onBuildTriggered(activeBuild.id, recipe.name)}
+                        className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer animate-pulse"
+                        title="Click to view live build console"
+                      >
+                        <Terminal size={14} />
+                        <span>Build Console</span>
+                      </button>
+                      <button
+                        onClick={() => handleCancelBuild(activeBuild.id)}
+                        className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                        title={t('cancelBuild')}
+                      >
+                        <XCircle size={15} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => handleTriggerBuild(recipe)}

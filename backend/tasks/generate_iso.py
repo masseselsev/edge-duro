@@ -331,10 +331,14 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 capture_output=True
                             )
                             if os.path.exists(em_dst) and os.path.getsize(em_dst) > 0:
+                                if em_dst.endswith(".zst"):
+                                    # Decompress .ko.zst -> .ko so BusyBox insmod can load it natively!
+                                    decomp_dst = em_dst[:-4]
+                                    subprocess.run(["zstd", "-d", "-f", em_dst, "-o", decomp_dst], capture_output=True)
+                                    if os.path.exists(decomp_dst) and os.path.getsize(decomp_dst) > 0:
+                                        if os.path.exists(em_dst):
+                                            os.remove(em_dst)
                                 injected_any = True
-                            else:
-                                if os.path.exists(em_dst):
-                                    os.remove(em_dst)
 
                         if injected_any:
                             append_res = subprocess.run(
@@ -476,11 +480,13 @@ done
 
 # Load isofs explicitly using insmod since we injected it
 KVER=$(uname -r)
-if [ -f "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" ]; then
-    insmod "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko.zst" 2>/dev/null || true
-elif [ -f "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" ]; then
-    insmod "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" 2>/dev/null || true
-fi
+for isofs_path in \
+    "/usr/lib/modules/$KVER/kernel/fs/isofs/isofs.ko" \
+    "/lib/modules/$KVER/kernel/fs/isofs/isofs.ko"; do
+    if [ -f "$isofs_path" ]; then
+        insmod "$isofs_path" 2>/dev/null || true
+    fi
+done
 
 echo "[INSTALLER] iso9660 status: $(grep iso9660 /proc/filesystems 2>/dev/null || echo 'NOT LOADED')"
 
@@ -539,7 +545,10 @@ if [ "$MOUNTED" = "0" ]; then
     ls -la /dev/sd* /dev/sr* /dev/nvme* 2>/dev/null
     echo ""
     echo "Dropping to emergency shell..."
-    exec /bin/sh
+    while true; do
+        /bin/sh
+        sleep 1
+    done
 fi
 
 echo "[INSTALLER] Boot media mounted: $BOOT_PART"

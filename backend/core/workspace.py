@@ -461,6 +461,111 @@ WantedBy=multi-user.target
             except Exception:
                 pass
 
+    # 5b. Disk expansion service (always installed, independent of the optional
+    # firstboot script above). The installer deploys images with a byte-for-byte
+    # dd, so the backup GPT header and last-usable-LBA still describe the smaller
+    # source image rather than the target disk. Until those are corrected the
+    # trailing partition cannot claim the extra capacity, stranding most of a
+    # large disk (a 9.5 GiB image on a 25 GiB disk leaves ~15 GiB unusable).
+    growfs_bin_dir = os.path.join(extra_dir, "opt", "edge", "bin")
+    os.makedirs(growfs_bin_dir, exist_ok=True)
+    growfs_script_path = os.path.join(growfs_bin_dir, "growfs.sh")
+    with open(growfs_script_path, "w") as f:
+        f.write("""#!/bin/sh
+# Expand the last GPT partition of the boot disk to fill the physical device.
+# Runs once, then drops a stamp file so subsequent boots are no-ops.
+# Only uses util-linux + e2fsprogs tooling, both present in a base install.
+STAMP=/var/lib/edge/growfs.done
+[ -e "$STAMP" ] && exit 0
+
+log() { echo "[GROWFS] $*"; }
+
+ROOT_SRC=$(findmnt -n -o SOURCE / 2>/dev/null)
+ROOT_DEV=$(readlink -f "$ROOT_SRC" 2>/dev/null)
+case "$ROOT_DEV" in
+    /dev/*) ;;
+    *) log "cannot resolve root device from '$ROOT_SRC', skipping"; exit 0 ;;
+esac
+
+PK=$(lsblk -no PKNAME "$ROOT_DEV" 2>/dev/null | head -n1 | tr -d ' ')
+[ -n "$PK" ] || { log "root $ROOT_DEV is not on a partitioned disk, skipping"; exit 0; }
+DISK="/dev/$PK"
+[ -b "$DISK" ] || { log "$DISK is not a block device, skipping"; exit 0; }
+
+LAST_PART=$(lsblk -nrpo NAME,TYPE "$DISK" 2>/dev/null | awk '$2=="part" {p=$1} END {print p}')
+[ -n "$LAST_PART" ] || { log "no partitions found on $DISK, skipping"; exit 0; }
+LAST_NR=$(echo "$LAST_PART" | grep -o '[0-9]*$')
+[ -n "$LAST_NR" ] || { log "cannot parse partition number from $LAST_PART, skipping"; exit 0; }
+
+# Move the backup GPT header and last-usable-LBA to the true end of the disk.
+log "relocating backup GPT header on $DISK"
+if ! sfdisk --relocate gpt-bak-std "$DISK" >/dev/null 2>&1; then
+    log "GPT relocation reported an error (continuing)"
+fi
+
+# Extend the trailing partition over the space that just became addressable.
+log "growing partition $LAST_NR of $DISK"
+if ! echo ", +" | sfdisk -N "$LAST_NR" --no-reread --force "$DISK" >/dev/null 2>&1; then
+    log "partition grow failed, leaving disk untouched"
+    exit 0
+fi
+
+partx -u "$DISK" >/dev/null 2>&1 || partprobe "$DISK" >/dev/null 2>&1 || true
+udevadm settle >/dev/null 2>&1 || true
+
+FSTYPE=$(blkid -o value -s TYPE "$LAST_PART" 2>/dev/null)
+case "$FSTYPE" in
+    ext2|ext3|ext4)
+        log "resizing $FSTYPE on $LAST_PART"
+        resize2fs "$LAST_PART" || { log "resize2fs failed, will retry next boot"; exit 0; }
+        ;;
+    xfs)
+        MP=$(findmnt -n -o TARGET "$LAST_PART" 2>/dev/null | head -n1)
+        [ -n "$MP" ] || { log "xfs on $LAST_PART not mounted, cannot grow"; exit 0; }
+        log "growing xfs mounted at $MP"
+        xfs_growfs "$MP" || { log "xfs_growfs failed, will retry next boot"; exit 0; }
+        ;;
+    *)
+        log "unsupported filesystem '$FSTYPE' on $LAST_PART, grew partition only"
+        ;;
+esac
+
+mkdir -p /var/lib/edge
+: > "$STAMP"
+log "completed"
+""")
+    os.chmod(growfs_script_path, 0o755)
+
+    growfs_systemd_dir = os.path.join(extra_dir, "etc", "systemd", "system")
+    os.makedirs(growfs_systemd_dir, exist_ok=True)
+    with open(os.path.join(growfs_systemd_dir, "edge-growfs.service"), "w") as f:
+        f.write("""[Unit]
+Description=Edge OS Expand Last Partition To Fill Disk
+Documentation=man:sfdisk(8)
+After=local-fs.target
+Before=edge-firstboot.service
+ConditionPathExists=!/var/lib/edge/growfs.done
+
+[Service]
+Type=oneshot
+ExecStart=/opt/edge/bin/growfs.sh
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
+""")
+
+    growfs_wants_dir = os.path.join(extra_dir, "etc", "systemd", "system", "multi-user.target.wants")
+    os.makedirs(growfs_wants_dir, exist_ok=True)
+    growfs_link = os.path.join(growfs_wants_dir, "edge-growfs.service")
+    if not os.path.exists(growfs_link):
+        try:
+            os.symlink("/etc/systemd/system/edge-growfs.service", growfs_link)
+        except Exception:
+            pass
+
     # 6. Debian Preseed file
     if recipe.raw_preseed_cfg and recipe.raw_preseed_cfg.strip():
         preseed_path = os.path.join(workspace_path, "preseed.cfg")

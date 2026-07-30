@@ -611,15 +611,26 @@ echo "[INSTALLER] Target Disk  : /dev/$TARGET_DISK ($DISK_SIZE_GB GB)"
 echo "[INSTALLER] Deploying Edge OS..."
 echo ""
 
-xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M conv=fsync 2>&1
+# iflag=fullblock matters here: reads from the xzcat pipe return short, so
+# without it dd issues a write per partial read (~37 KiB) instead of per bs.
+xzcat "$RAW_XZ" | dd of="/dev/$TARGET_DISK" bs=4M iflag=fullblock conv=fsync 2>&1
 
 echo ""
 echo "[INSTALLER SUCCESS] Image written to /dev/$TARGET_DISK!"
-echo "[INSTALLER] Rebooting in 5 seconds..."
 sync
-sleep 5
-echo b > /proc/sysrq-trigger
-reboot -f
+umount /mnt/cdrom 2>/dev/null
+
+# Power off instead of rebooting. Firmware boot order puts the installation
+# media ahead of the target disk, and this ISO's default GRUB entry is the
+# unattended installer, so a reboot with the media still attached re-runs the
+# install and overwrites the disk on every single power cycle.
+echo ""
+echo "[INSTALLER] Installation complete. Remove the installation media before"
+echo "[INSTALLER] powering the system back on, or it will reinstall again."
+echo "[INSTALLER] Powering off in 10 seconds..."
+sleep 10
+echo o > /proc/sysrq-trigger
+poweroff -f
 """)
             os.chmod(init_script_path, 0o755)
 

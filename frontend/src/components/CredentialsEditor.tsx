@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Plus, Trash2, Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { KeyRound, Plus, Trash2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import FieldLabel from './FieldLabel';
 
@@ -33,9 +33,11 @@ export default function CredentialsEditor({
 }: CredentialsEditorProps) {
   const { t } = useTranslation();
 
-  const [showRoot, setShowRoot] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  // DEFAULT_USER_GROUPS already includes "sudo", so a new user is admin by
+  // default, matching the previous simple-cdd preseed's "user" account.
+  const [newIsSudo, setNewIsSudo] = useState(true);
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,16 +45,24 @@ export default function CredentialsEditor({
     if (!username || !NAME_RE.test(username)) return;
     if (users.some((u) => u.username === username)) return;
 
-    onUsersChange([
-      ...users,
-      { username, password: newPassword, groups: [...DEFAULT_USER_GROUPS], shell: '/bin/bash' },
-    ]);
+    const groups = newIsSudo
+      ? [...DEFAULT_USER_GROUPS]
+      : DEFAULT_USER_GROUPS.filter((g) => g !== 'sudo');
+
+    onUsersChange([...users, { username, password: newPassword, groups, shell: '/bin/bash' }]);
     setNewUsername('');
     setNewPassword('');
+    setNewIsSudo(true);
   };
 
   const handleUpdateUser = (index: number, field: keyof UserAccount, value: any) => {
     onUsersChange(users.map((u, i) => (i === index ? { ...u, [field]: value } : u)));
+  };
+
+  const handleToggleSudo = (index: number, checked: boolean) => {
+    const groups = users[index].groups || [];
+    const next = checked ? Array.from(new Set([...groups, 'sudo'])) : groups.filter((g) => g !== 'sudo');
+    handleUpdateUser(index, 'groups', next);
   };
 
   const handleRemoveUser = (index: number) => {
@@ -86,24 +96,15 @@ export default function CredentialsEditor({
         >
           {t('rootPassword') || 'Root Password'}
         </FieldLabel>
-        <div className="relative">
-          <input
-            type={showRoot ? 'text' : 'password'}
-            value={rootPassword}
-            onChange={(e) => onRootPasswordChange(e.target.value)}
-            placeholder={t('rootPasswordPlaceholder') || 'Leave empty to keep root locked'}
-            autoComplete="new-password"
-            className="w-full px-3 py-2 pr-10 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => setShowRoot(!showRoot)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
-            aria-label={showRoot ? 'Hide password' : 'Show password'}
-          >
-            {showRoot ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
+        <input
+          type="text"
+          value={rootPassword}
+          onChange={(e) => onRootPasswordChange(e.target.value)}
+          placeholder={t('rootPasswordPlaceholder') || 'Leave empty to keep root locked'}
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
+        />
         {!rootPassword && (
           <p className="flex items-start gap-1.5 text-[11px] text-amber-500/80">
             <ShieldAlert className="w-3.5 h-3.5 mt-px shrink-0" />
@@ -152,10 +153,11 @@ export default function CredentialsEditor({
                   {t('password') || 'Password'}
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   value={user.password || ''}
                   onChange={(e) => handleUpdateUser(index, 'password', e.target.value)}
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  spellCheck={false}
                   className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
                 />
               </div>
@@ -212,6 +214,27 @@ export default function CredentialsEditor({
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+
+              <div className="sm:col-span-12">
+                <label
+                  title={
+                    t('sudoCheckboxHint') ||
+                    'Grants full root access via sudo (adds/removes the "sudo" group). The sudo package is always included in the build, so this checkbox is never inert.'
+                  }
+                  className="inline-flex items-center gap-2 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(user.groups || []).includes('sudo')}
+                    onChange={(e) => handleToggleSudo(index, e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
+                  />
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[11px] text-zinc-300 font-medium">
+                    {t('addToSudo') || 'Add to sudo (admin access)'}
+                  </span>
+                </label>
+              </div>
             </div>
           ))}
         </div>
@@ -243,10 +266,11 @@ export default function CredentialsEditor({
               {t('password') || 'Password'}
             </label>
             <input
-              type="password"
+              type="text"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
+              autoComplete="off"
+              spellCheck={false}
               className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
             />
           </div>
@@ -260,6 +284,26 @@ export default function CredentialsEditor({
               <Plus className="w-3.5 h-3.5" />
               <span>{t('addUser') || 'Add User'}</span>
             </button>
+          </div>
+          <div className="sm:col-span-12">
+            <label
+              title={
+                t('sudoCheckboxHint') ||
+                'Grants full root access via sudo (adds/removes the "sudo" group). The sudo package is always included in the build, so this checkbox is never inert.'
+              }
+              className="inline-flex items-center gap-2 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                checked={newIsSudo}
+                onChange={(e) => setNewIsSudo(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
+              />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[11px] text-zinc-300 font-medium">
+                {t('addToSudo') || 'Add to sudo (admin access)'}
+              </span>
+            </label>
           </div>
         </div>
         {(usernameInvalid || usernameTaken) && (

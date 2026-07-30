@@ -15,7 +15,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     # a binary that doesn't exist: agetty prints the login prompt, the user types
     # a name, Enter is echoed by the kernel tty layer, and then nothing, because
     # there is no process left to read it.
-    for req_pkg in ["apt", "bash", "coreutils", "login", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
+    # "sudo" provides /usr/bin/sudo and the /etc/sudoers.d/ rule granting the
+    # "sudo" group root access. Without it, adding a user to the "sudo" group
+    # (via workspace.py's groupadd -f) creates an inert group -- nothing on the
+    # system checks membership in it, so the recipe's sudo checkbox would
+    # silently grant nothing on a recipe that happens not to list this package.
+    for req_pkg in ["apt", "bash", "coreutils", "login", "sudo", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
         if req_pkg not in pkgs:
             pkgs.append(req_pkg)
 

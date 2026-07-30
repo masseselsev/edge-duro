@@ -136,6 +136,24 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     with open(os.path.join(apt_conf_dir, "99force-ipv4"), "w") as f:
         f.write('Acquire::ForceIPv4 "true";\n')
 
+    # Package downloads must be cached on the persistent workspace volume.
+    # CacheDirectory= is NOT the package cache -- it only holds the incremental
+    # image cache and does nothing unless Incremental= is also enabled. The
+    # distribution package manager's downloads go to PackageCacheDirectory=,
+    # and when that is unset mkosi falls back to /var/cache/mkosi inside the
+    # container. Only /app, /opt/data/duro_workspace and /proc are bind mounted
+    # into the worker, so that fallback is container-local and every
+    # "docker compose up --build" threw away the whole package cache (~1.2 GB
+    # for ubuntu/resolute), forcing a full re-download on the next build.
+    ws_root = os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace")
+    pkg_cache_dir = os.path.join(ws_root, "pkgcache")
+    image_cache_dir = os.path.join(ws_root, "cache")
+    for d in (pkg_cache_dir, image_cache_dir):
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            pass
+
     config_lines = [
         "[Distribution]",
         f"Distribution={mkosi_distro}",
@@ -144,7 +162,8 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
         f"Repositories={components}",
         "",
         "[Build]",
-        "CacheDirectory=/opt/data/duro_workspace/cache",
+        f"PackageCacheDirectory={pkg_cache_dir}",
+        f"CacheDirectory={image_cache_dir}",
         "WorkspaceDirectory=/opt/data/duro_workspace/mkosi_work",
         "BuildSources=",
         "WithNetwork=yes",

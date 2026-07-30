@@ -172,8 +172,9 @@ d-i netcfg/get_hostname string edge-node
 d-i netcfg/get_domain string local
 """
 
-    postinst_content = """command -v update-locale >/dev/null 2>&1 && update-locale LANG=C.UTF-8 || true
-rm -f /etc/machine-id
+    # Locale is now a first-class recipe field applied by populate_extra_tree,
+    # so the seed no longer hardcodes update-locale here.
+    postinst_content = """rm -f /etc/machine-id
 """
 
     firstboot_content = """#!/bin/sh

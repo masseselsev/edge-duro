@@ -28,20 +28,20 @@ export default function AdvancedEditor({
   onChangeFirstboot
 }: AdvancedEditorProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'mkosi' | 'preseed' | 'postinst' | 'firstboot'>('mkosi');
+  // preseed.cfg was removed: it is a debian-installer concept and mkosi never
+  // reads it, so anything entered there had no effect on the built image.
+  const [activeTab, setActiveTab] = useState<'mkosi' | 'postinst' | 'firstboot'>('mkosi');
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
   const getCurrentContent = () => {
     if (activeTab === 'mkosi') return rawMkosiConf || '';
-    if (activeTab === 'preseed') return rawPreseedCfg || '';
     if (activeTab === 'postinst') return rawPostinst || '';
     return rawFirstboot || '';
   };
 
   const handleContentChange = (content: string) => {
     if (activeTab === 'mkosi') onChangeMkosi(content);
-    else if (activeTab === 'preseed') onChangePreseed(content);
     else if (activeTab === 'postinst') onChangePostinst(content);
     else onChangeFirstboot(content);
   };
@@ -85,7 +85,7 @@ export default function AdvancedEditor({
         </div>
 
         <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 flex-wrap">
-          {(['mkosi', 'preseed', 'postinst', 'firstboot'] as const).map((tab) => (
+          {(['mkosi', 'postinst', 'firstboot'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -94,7 +94,7 @@ export default function AdvancedEditor({
                 activeTab === tab ? 'bg-amber-500 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {tab === 'mkosi' ? 'mkosi.conf' : tab === 'preseed' ? 'preseed.cfg' : tab === 'postinst' ? 'postinst.sh' : 'firstboot.sh'}
+              {tab === 'mkosi' ? 'mkosi.conf' : tab === 'postinst' ? 'postinst.sh (runs in chroot)' : 'firstboot.sh'}
             </button>
           ))}
         </div>

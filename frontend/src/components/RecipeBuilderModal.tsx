@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Flame, X, Loader2, Check } from 'lucide-react';
+import { Flame, X, Loader2, Check, Boxes } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BaseImageSelector from './BaseImageSelector';
 import PackageSelector from './PackageSelector';
@@ -10,6 +10,7 @@ import ScriptManager from './ScriptManager';
 import AdvancedEditor from './AdvancedEditor';
 import PartitionEditor, { Partition, DEFAULT_EDGE_BOX_PARTITIONS } from './PartitionEditor';
 import CredentialsEditor, { UserAccount } from './CredentialsEditor';
+import RepoBrowserModal from './RepoBrowserModal';
 import { SearchableSelect } from './SearchableSelect';
 
 interface RecipeBuilderModalProps {
@@ -79,6 +80,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [hostnameFromNetif, setHostnameFromNetif] = useState<boolean>(recipe?.hostname_from_netif || false);
   const [isDev, setIsDev] = useState<boolean>(recipe?.is_dev || false);
   const [locale, setLocale] = useState(recipe?.locale || 'C.UTF-8');
+  const [showRepoBrowser, setShowRepoBrowser] = useState(false);
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
@@ -314,6 +316,34 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
           </div>
 
           <PackageSelector packages={packages} onChange={setPackages} />
+
+          {/* Browse packages straight from the configured APT repositories */}
+          <button
+            type="button"
+            onClick={() => setShowRepoBrowser(true)}
+            disabled={!recipe?.id || repositories.length === 0}
+            title={
+              !recipe?.id
+                ? 'Save the recipe first to browse its repositories'
+                : repositories.length === 0
+                ? 'Add an APT repository first'
+                : undefined
+            }
+            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Boxes className="w-4 h-4" />
+            {t('browseRepository') || 'Browse Repository Packages'}
+          </button>
+
+          {showRepoBrowser && (
+            <RepoBrowserModal
+              recipeId={recipe?.id}
+              repositories={repositories}
+              selected={packages}
+              onClose={() => setShowRepoBrowser(false)}
+              onApply={setPackages}
+            />
+          )}
           <AptRepoManager repositories={repositories} onChange={setRepositories} />
           <PartitionEditor partitions={partitions} onChange={setPartitions} />
           <AssetInjector recipeId={recipe?.id} assets={assets} onUpload={handleAssetUpload} onDelete={handleAssetDelete} />

@@ -59,6 +59,14 @@ class Recipe(Base):
     network_config = Column(JSON, nullable=True)
     ssh_keys = Column(JSON, nullable=False, default=list)
 
+    # Credentials. Passwords may be supplied in plaintext or already hashed
+    # (any crypt(3) string, e.g. "$6$..."); they are hashed by chpasswd during
+    # the build so the image itself never contains a plaintext password.
+    # An empty root_password leaves the root account locked (the default).
+    root_password = Column(String, nullable=True)
+    # [{"username": "user", "password": "...", "groups": ["sudo"], "shell": "/bin/bash"}]
+    users = Column(JSON, nullable=False, default=list)
+
     kernel_params = Column(String, nullable=True)
     partitions = Column(JSON, nullable=False, default=list)
     raw_mkosi_conf = Column(Text, nullable=True)

@@ -9,6 +9,7 @@ import AssetInjector from './AssetInjector';
 import ScriptManager from './ScriptManager';
 import AdvancedEditor from './AdvancedEditor';
 import PartitionEditor, { Partition, DEFAULT_EDGE_BOX_PARTITIONS } from './PartitionEditor';
+import CredentialsEditor, { UserAccount } from './CredentialsEditor';
 import { SearchableSelect } from './SearchableSelect';
 
 interface RecipeBuilderModalProps {
@@ -59,6 +60,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
+  const [rootPassword, setRootPassword] = useState(recipe?.root_password || '');
+  const [users, setUsers] = useState<UserAccount[]>(recipe?.users || []);
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
   const [rawPreseedCfg, setRawPreseedCfg] = useState(recipe?.raw_preseed_cfg || '');
   const [rawPostinst, setRawPostinst] = useState(recipe?.raw_postinst || '');
@@ -100,6 +103,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       hostname_from_netif: hostnameFromNetif,
       timezone: timezone || 'UTC',
       ssh_keys: parsedKeys,
+      root_password: rootPassword.trim() || null,
+      users,
       kernel_params: kernelParams.trim() || null,
       raw_mkosi_conf: rawMkosiConf || null,
       raw_preseed_cfg: rawPreseedCfg || null,
@@ -303,6 +308,14 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
             />
           </div>
+
+          {/* Credentials: root password + additional login accounts */}
+          <CredentialsEditor
+            rootPassword={rootPassword}
+            users={users}
+            onRootPasswordChange={setRootPassword}
+            onUsersChange={setUsers}
+          />
 
           {/* Kernel Parameters (CMDLINE) */}
           <div className="space-y-1.5">

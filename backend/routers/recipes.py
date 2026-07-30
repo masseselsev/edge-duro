@@ -156,6 +156,8 @@ def clone_recipe(
         timezone=original.timezone,
         network_config=original.network_config,
         ssh_keys=original.ssh_keys,
+        root_password=original.root_password,
+        users=original.users,
         kernel_params=original.kernel_params,
         partitions=original.partitions,
         raw_mkosi_conf=original.raw_mkosi_conf,

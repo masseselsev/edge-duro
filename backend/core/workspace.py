@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import shutil
 from typing import List
 from models import Recipe, RecipeAsset
@@ -283,6 +284,57 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     if recipe.timezone and recipe.timezone.strip():
         tz = recipe.timezone.strip()
         postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime 2>/dev/null && echo \"{tz}\" > /etc/timezone 2>/dev/null || true")
+
+    # Credentials: root password and additional login accounts.
+    # Without this the image ships root:* in /etc/shadow -- a locked account --
+    # so password login is impossible on console, serial and SSH alike, leaving
+    # only the console autologin and recipe ssh_keys as a way in.
+    #
+    # Passwords are piped to chpasswd inside the chroot, so the image stores
+    # only the resulting crypt hash and never the plaintext. A value that
+    # already looks like a crypt(3) hash ("$6$...") is installed verbatim with
+    # "chpasswd -e" instead of being hashed a second time. Every interpolated
+    # value is shell-quoted; usernames and group names are additionally
+    # restricted to the POSIX portable set by the API schema.
+    def _chpasswd_cmd(account: str, password: str) -> str:
+        entry = shlex.quote(f"{account}:{password}")
+        already_hashed = bool(re.match(r'^\$[0-9a-zA-Z]+\$', password))
+        flag = " -e" if already_hashed else ""
+        return f"echo {entry} | chpasswd{flag} || true"
+
+    if recipe.root_password and recipe.root_password.strip():
+        postinst_commands.append(
+            "echo '[POSTINST] Setting root password'\n"
+            + _chpasswd_cmd("root", recipe.root_password.strip())
+        )
+
+    if recipe.users and isinstance(recipe.users, list):
+        for account in recipe.users:
+            if not isinstance(account, dict):
+                continue
+            username = (account.get("username") or "").strip()
+            if not username:
+                continue
+            shell_path = (account.get("shell") or "/bin/bash").strip()
+            groups = [str(g).strip() for g in (account.get("groups") or []) if str(g).strip()]
+            q_user = shlex.quote(username)
+
+            lines = [f"echo '[POSTINST] Creating user {username}'"]
+            lines.append(
+                f"id -u {q_user} >/dev/null 2>&1 || "
+                f"useradd -m -s {shlex.quote(shell_path)} {q_user} || true"
+            )
+            for group in groups:
+                # -f makes this a no-op when the group already exists, and
+                # creates it when it does not (netdev, for instance, is absent
+                # from a minimal image even though the old preseed used it).
+                lines.append(f"groupadd -f {shlex.quote(group)} 2>/dev/null || true")
+            if groups:
+                lines.append(f"usermod -aG {shlex.quote(','.join(groups))} {q_user} || true")
+            password = account.get("password")
+            if password:
+                lines.append(_chpasswd_cmd(username, str(password)))
+            postinst_commands.append("\n".join(lines))
 
     hostname_mac_script = """
 # Auto-configure hostname to equal active network interface MAC address (strictly lowercase, no colons/delimiters)

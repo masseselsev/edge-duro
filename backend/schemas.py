@@ -94,6 +94,55 @@ class PartitionSchema(BaseModel):
     label: Optional[str] = None
 
 
+class UserAccountSchema(BaseModel):
+    """Additional login account created in the image."""
+    username: str = Field(..., min_length=1, max_length=32)
+    password: Optional[str] = None
+    groups: List[str] = Field(default_factory=list)
+    shell: str = Field(default="/bin/bash")
+
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        import re
+        v = v.strip()
+        # Usernames are interpolated into useradd/chpasswd commands during the
+        # build, so restrict them to the POSIX portable set rather than relying
+        # on downstream quoting.
+        if not re.fullmatch(r'[a-z_][a-z0-9_-]*', v):
+            raise ValueError(
+                "Username must start with a lowercase letter or underscore and "
+                "contain only lowercase letters, digits, underscore or hyphen"
+            )
+        return v
+
+    @field_validator('groups')
+    @classmethod
+    def validate_groups(cls, v: List[str]) -> List[str]:
+        import re
+        cleaned = []
+        for g in v:
+            g = (g or "").strip()
+            if not g:
+                continue
+            if not re.fullmatch(r'[a-z_][a-z0-9_-]*', g):
+                raise ValueError(f"Invalid group name: {g}")
+            cleaned.append(g)
+        return cleaned
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_password_value(v)
+
+
+def _validate_password_value(v: Optional[str]) -> Optional[str]:
+    # Newlines and colons would corrupt the "user:password" chpasswd stream.
+    if v and ('\n' in v or '\r' in v or ':' in v):
+        raise ValueError("Password must not contain newlines or ':'")
+    return v
+
+
 class RecipeBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -108,6 +157,8 @@ class RecipeBase(BaseModel):
     timezone: str = Field(default="UTC")
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
+    root_password: Optional[str] = None
+    users: List[UserAccountSchema] = Field(default_factory=list)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
     partitions: List[PartitionSchema] = Field(default_factory=lambda: [
         {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},
@@ -119,6 +170,11 @@ class RecipeBase(BaseModel):
     raw_preseed_cfg: Optional[str] = None
     raw_postinst: Optional[str] = None
     raw_firstboot: Optional[str] = None
+
+    @field_validator('root_password')
+    @classmethod
+    def validate_root_password(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_password_value(v)
 
 
 class RecipeCreate(RecipeBase):

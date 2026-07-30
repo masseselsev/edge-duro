@@ -222,6 +222,11 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
                 f.write("\n".join(repo_lines) + "\n")
 
     # 3. Assets overlay
+    # asset_hook_cmds collects assets flagged "Register as Post-Install Hook";
+    # they are appended to the postinst body further below. Before this the
+    # is_postinst flag was stored and returned by the API but never read by the
+    # build, so ticking the box in the UI silently did nothing.
+    asset_hook_cmds = []
     for asset in assets:
         if os.path.exists(asset.file_path):
             if asset.install_target:
@@ -232,6 +237,23 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
 
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             shutil.copy2(asset.file_path, dest_file)
+
+            if getattr(asset, "is_postinst", False):
+                # Path as seen from inside the image (mkosi.extra is overlaid
+                # onto /), not the workspace path.
+                in_image = "/" + os.path.relpath(dest_file, extra_dir)
+                q_path = shlex.quote(in_image)
+                if in_image.endswith(".deb"):
+                    asset_hook_cmds.append(
+                        f"echo '[POSTINST] Installing asset package {os.path.basename(in_image)}'\n"
+                        f"dpkg -i {q_path} 2>/dev/null || apt-get -y -f install || true"
+                    )
+                else:
+                    asset_hook_cmds.append(
+                        f"echo '[POSTINST] Running asset hook {os.path.basename(in_image)}'\n"
+                        f"chmod +x {q_path} 2>/dev/null || true\n"
+                        f"{q_path} || true"
+                    )
 
     # 3.4. Release-Isolated Persistent APT Package Cache configuration
     rel_clean = (recipe.release if recipe and recipe.release else "default").lower().replace(" ", "_")
@@ -296,6 +318,32 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     if recipe.timezone and recipe.timezone.strip():
         tz = recipe.timezone.strip()
         postinst_commands.append(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime 2>/dev/null && echo \"{tz}\" > /etc/timezone 2>/dev/null || true")
+
+    # System locale. C.UTF-8 is built into glibc and needs no generation; any
+    # other locale has to be uncommented in /etc/locale.gen and compiled by
+    # locale-gen (from the "locales" package) before update-locale can select
+    # it. Note RemoveFiles strips /usr/share/locale/* (program translations),
+    # not /usr/lib/locale (the compiled locale archive), so the locale itself
+    # still works -- only translated program messages are absent.
+    locale_val = (getattr(recipe, "locale", None) or "C.UTF-8").strip()
+    if locale_val:
+        q_locale = shlex.quote(locale_val)
+        postinst_commands.append("\n".join([
+            f"echo '[POSTINST] Configuring locale {locale_val}'",
+            f"LOC={q_locale}",
+            'if [ "$LOC" != "C.UTF-8" ] && [ "$LOC" != "C" ] && [ "$LOC" != "POSIX" ]; then',
+            '  if [ -f /etc/locale.gen ]; then',
+            '    grep -q "^$LOC " /etc/locale.gen 2>/dev/null || echo "$LOC UTF-8" >> /etc/locale.gen',
+            '    sed -i "s/^# *\\($LOC \\)/\\1/" /etc/locale.gen 2>/dev/null || true',
+            '  fi',
+            '  command -v locale-gen >/dev/null 2>&1 && locale-gen "$LOC" 2>/dev/null || true',
+            'fi',
+            'if command -v update-locale >/dev/null 2>&1; then',
+            '  update-locale LANG="$LOC" 2>/dev/null || true',
+            'else',
+            '  echo "LANG=$LOC" > /etc/default/locale',
+            'fi',
+        ]))
 
     # Credentials: root password and additional login accounts.
     # Without this the image ships root:* in /etc/shadow -- a locked account --
@@ -369,11 +417,33 @@ fi
     if recipe.hostname_from_netif:
         postinst_commands.append(hostname_mac_script)
 
+    # Asset hooks run before the recipe's own raw postinst, so a custom script
+    # can rely on anything the uploaded assets installed.
+    postinst_commands.extend(asset_hook_cmds)
+
     if recipe.raw_postinst and recipe.raw_postinst.strip():
         postinst_commands.append(recipe.raw_postinst.strip())
 
     # Clean formatted postinst commands
     postinst_body = "\n".join(postinst_commands) if postinst_commands else "echo '[POSTINST] Complete.'"
+
+    # Compose the systemd-boot loader entry cmdline from the recipe.
+    # This entry is what actually boots (loader.conf sets "default edge.conf"),
+    # so hardcoding the options here meant recipe.kernel_params only ever
+    # reached mkosi's UKI and had no effect on a normal boot. Defaults are only
+    # added when the recipe has not already specified an equivalent, so a recipe
+    # can override the console or verbosity without ending up with duplicates.
+    _kp = (recipe.kernel_params or "").strip()
+    _loader_opts = ["root=LABEL=edgeroot", "rw"]
+    if "quiet" not in _kp:
+        _loader_opts += ["quiet", "loglevel=3"]
+    if "fsck.mode" not in _kp:
+        _loader_opts.append("fsck.mode=skip")
+    if "console=" not in _kp:
+        _loader_opts += ["console=tty0", "console=ttyS0,115200"]
+    if _kp:
+        _loader_opts.append(_kp)
+    loader_options = " ".join(_loader_opts)
 
     postinst_script = f"""#!/bin/bash
 set -e
@@ -557,7 +627,7 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
       echo "title Edge OS" > /boot/loader/entries/edge.conf
       echo "linux $KIMG" >> /boot/loader/entries/edge.conf
       echo "initrd $IIMG" >> /boot/loader/entries/edge.conf
-      echo "options root=LABEL=edgeroot rw quiet loglevel=3 fsck.mode=skip console=tty0 console=ttyS0,115200 ipv6.disable=1 nohz=off" >> /boot/loader/entries/edge.conf
+      echo "options {loader_options}" >> /boot/loader/entries/edge.conf
       echo "[POSTINST] Loader entry edge.conf -> linux $KIMG, initrd $IIMG"
     else
       # No loose kernel/initrd: drop the entry and let systemd-boot

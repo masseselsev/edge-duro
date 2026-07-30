@@ -154,6 +154,7 @@ def clone_recipe(
         hostname=original.hostname,
         hostname_from_netif=original.hostname_from_netif,
         timezone=original.timezone,
+        locale=original.locale,
         network_config=original.network_config,
         ssh_keys=original.ssh_keys,
         ssh_port=getattr(original, 'ssh_port', 2222) or 2222,

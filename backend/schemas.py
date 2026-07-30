@@ -155,6 +155,7 @@ class RecipeBase(BaseModel):
     hostname: str = Field(default="edge-node")
     hostname_from_netif: bool = Field(default=False)
     timezone: str = Field(default="UTC")
+    locale: str = Field(default="C.UTF-8")
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
     ssh_port: int = Field(default=2222, ge=1, le=65535)

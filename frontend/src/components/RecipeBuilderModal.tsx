@@ -44,6 +44,26 @@ const getSystemTimezones = () => {
 
 const TIMEZONES = getSystemTimezones();
 
+// C.UTF-8 is built into glibc and needs no locale-gen; the rest require the
+// "locales" package in the recipe so locale-gen can compile them.
+const LOCALES = [
+  'C.UTF-8',
+  'en_US.UTF-8',
+  'en_GB.UTF-8',
+  'ru_RU.UTF-8',
+  'uk_UA.UTF-8',
+  'de_DE.UTF-8',
+  'fr_FR.UTF-8',
+  'es_ES.UTF-8',
+  'pl_PL.UTF-8',
+  'tr_TR.UTF-8',
+  'uz_UZ.UTF-8',
+  'kk_KZ.UTF-8',
+  'zh_CN.UTF-8',
+  'C',
+  'POSIX',
+].map((l) => ({ label: l, value: l }));
+
 export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: RecipeBuilderModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(recipe?.name || '');
@@ -58,6 +78,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [hostname, setHostname] = useState(recipe?.hostname || 'edge-node');
   const [hostnameFromNetif, setHostnameFromNetif] = useState<boolean>(recipe?.hostname_from_netif || false);
   const [isDev, setIsDev] = useState<boolean>(recipe?.is_dev || false);
+  const [locale, setLocale] = useState(recipe?.locale || 'C.UTF-8');
   const [timezone, setTimezone] = useState(recipe?.timezone || 'UTC');
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
@@ -105,6 +126,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       hostname_from_netif: hostnameFromNetif,
       is_dev: isDev,
       timezone: timezone || 'UTC',
+      locale: locale || 'C.UTF-8',
       ssh_keys: parsedKeys,
       ssh_port: sshPort,
       root_password: rootPassword.trim() || null,
@@ -325,6 +347,14 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 options={TIMEZONES}
                 value={timezone}
                 onChange={setTimezone}
+              />
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider pt-2">
+                {t('systemLocale') || 'System Locale'}
+              </label>
+              <SearchableSelect
+                options={LOCALES}
+                value={locale}
+                onChange={setLocale}
               />
             </div>
           </div>

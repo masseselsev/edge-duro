@@ -68,6 +68,9 @@ def download_edge_packages(recipe, workspace_path: str) -> List[str]:
     Returns list of downloaded package file paths.
     """
     dest_dir = os.path.join(workspace_path, "mkosi.extra", "opt", "edge_packages")
+    if os.path.exists(dest_dir):
+        import shutil
+        shutil.rmtree(dest_dir, ignore_errors=True)
     os.makedirs(dest_dir, exist_ok=True)
 
     # Determine packages to fetch

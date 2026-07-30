@@ -395,7 +395,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                 "mdev", "switch_root", "find", "xargs", "wc", "tr", "cut",
                 "blkid", "fdisk", "mkswap", "swapon", "swapoff", "free",
                 "ps", "kill", "test", "[", "true", "false", "expr",
-                "modprobe", "insmod", "lsmod", "rmmod",
+                "modprobe", "insmod", "lsmod", "rmmod", "tee", "mkfifo",
             ]
             for applet in busybox_applets:
                 link_path = os.path.join(ramfs_dir, "bin", applet)
@@ -461,6 +461,16 @@ export LD_LIBRARY_PATH=/lib:/lib64:/lib/x86_64-linux-gnu
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs dev /dev
+
+# Mirror all script output to BOTH the VGA console and the serial port.
+# /dev/console (our inherited stdout/stderr) only ever resolves to whichever
+# console= was LAST on the kernel cmdline, so relying on it alone means we're
+# invisible on whichever console isn't "preferred" (e.g. VirtualBox's GUI
+# screen when console=ttyS0 comes last, as it does here for QEMU serial
+# capture). Tee-ing through a fifo makes boot progress visible on both.
+mkfifo /console.fifo 2>/dev/null
+tee /dev/tty0 /dev/ttyS0 < /console.fifo >/dev/null 2>&1 &
+exec > /console.fifo 2>&1
 
 echo "===================================================="
 echo "    Edge OS Automated Disk Installer (D.U.R.O.)     "

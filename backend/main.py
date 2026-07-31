@@ -146,7 +146,8 @@ def seed_default_debian12_recipe(db: Session):
         "nginx-full", "gstreamer1.0-libav", "gstreamer1.0-plugins-good", "gstreamer1.0-plugins-bad",
         "gstreamer1.0-plugins-ugly", "gstreamer1.0-vaapi", "libturbojpeg0", "zip", "unzip",
         "rsyslog", "usbutils", "libmodbus5", "libgomp1", "resolvconf", "openvpn", "zabbix-agent",
-        "sysstat", "jq",
+        "sysstat", "jq", "htop", "btop", "iputils-ping", "traceroute", "bind9-dnsutils", "ethtool",
+        "tcpdump", "iperf3", "pciutils", "strace", "lsof",
         "edge-base", "edge-target-tools", "edge-python3-psuctl", "acpi-support-base",
         "dbus-user-session", "python3-requests"
     ]
@@ -229,7 +230,7 @@ log "DONE"
         print("Default Debian 12 Bookworm base recipe seeded successfully.")
     else:
         current_pkgs = list(existing.packages or [])
-        for ep in ["edge-base", "edge-target-tools", "edge-python3-psuctl", "acpi-support-base", "dbus-user-session", "python3-requests"]:
+        for ep in ["edge-base", "edge-target-tools", "edge-python3-psuctl", "acpi-support-base", "dbus-user-session", "python3-requests", "htop", "btop", "iputils-ping", "traceroute", "bind9-dnsutils", "ethtool", "tcpdump", "iperf3", "pciutils"]:
             if ep not in current_pkgs:
                 current_pkgs.append(ep)
         existing.packages = current_pkgs

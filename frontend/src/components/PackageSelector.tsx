@@ -32,7 +32,8 @@ const EDGE_SUGGESTIONS = [
 
 const STANDARD_SUGGESTIONS = [
   'curl', 'wget', 'vim', 'git', 'nginx', 'openssh-server',
-  'systemd-container', 'docker.io', 'htop', 'sudo', 'ca-certificates',
+  'systemd-container', 'docker.io', 'htop', 'btop', 'iputils-ping', 'traceroute',
+  'dnsutils', 'ethtool', 'tcpdump', 'iperf3', 'sudo', 'ca-certificates',
   'firmware-misc-nonfree', 'intel-media-va-driver-non-free', 'linux-image-amd64', 'net-tools',
 ];
 

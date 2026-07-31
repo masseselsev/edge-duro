@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle, XCircle } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle, XCircle, FlaskConical } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeBuilderModal from './RecipeBuilderModal';
 
@@ -156,7 +156,11 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
               <div
                 key={recipe.id}
                 className={`bg-zinc-900 border rounded-2xl p-5 transition-all duration-200 flex flex-col justify-between space-y-4 shadow-xl group relative ${
-                  activeBuild ? 'border-amber-500/50 shadow-amber-500/10 ring-1 ring-amber-500/30' : 'border-zinc-800 hover:border-zinc-700'
+                  activeBuild
+                    ? 'border-amber-500/50 shadow-amber-500/10 ring-1 ring-amber-500/30'
+                    : recipe.is_dev
+                    ? 'border-fuchsia-500/40 shadow-fuchsia-950/20 ring-1 ring-fuchsia-500/20'
+                    : 'border-zinc-800 hover:border-zinc-700'
                 }`}
               >
                 <div className="space-y-3">
@@ -166,6 +170,15 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                         <h3 className="text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
                           {recipe.name}
                         </h3>
+                        {recipe.is_dev && (
+                          <span
+                            title={t('devBuildHint') || 'Marks this recipe as a dev build. Artifacts are named edge-dev_… so dev images cannot be confused with release ones.'}
+                            className="flex items-center gap-1 text-[9px] font-mono font-bold text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-0.5 rounded-full"
+                          >
+                            <FlaskConical size={10} />
+                            <span>{t('devBadge') || 'DEV'}</span>
+                          </span>
+                        )}
                         {activeBuild && (
                           <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
                             <Circle size={6} className="fill-amber-400 animate-ping" />

@@ -54,7 +54,7 @@ export default function RecipeViewerModal({ recipe, onClose }: RecipeViewerModal
         <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1 text-xs">
           
           {/* System Specs Overview */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-zinc-950/50 p-4 border border-zinc-800/80 rounded-2xl">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 bg-zinc-950/50 p-4 border border-zinc-800/80 rounded-2xl">
             <div>
               <span className="text-zinc-500 font-bold uppercase text-[10px] block">Hostname</span>
               <span className="font-mono text-zinc-200 font-bold">
@@ -65,6 +65,12 @@ export default function RecipeViewerModal({ recipe, onClose }: RecipeViewerModal
               <span className="text-zinc-500 font-bold uppercase text-[10px] block">SSH Port</span>
               <span className="font-mono text-cyan-400 font-bold">
                 {recipe.ssh_port || 2222}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 font-bold uppercase text-[10px] block">DNS Servers</span>
+              <span className="font-mono text-indigo-400 font-bold truncate block" title={(recipe.network_config?.interfaces?.[0]?.dns || ['77.88.8.8', '1.1.1.1', '9.9.9.9', '8.8.8.8']).join(' ')}>
+                {(recipe.network_config?.interfaces?.[0]?.dns || ['77.88.8.8', '1.1.1.1', '9.9.9.9', '8.8.8.8']).join(' ')}
               </span>
             </div>
             <div>

@@ -96,6 +96,12 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [rawFirstboot, setRawFirstboot] = useState(recipe?.raw_firstboot || '');
   const [kernelParams, setKernelParams] = useState(recipe?.kernel_params || 'ipv6.disable=1 nohz=off');
 
+  const existingDns = recipe?.network_config?.interfaces?.[0]?.dns;
+  const initialDnsStr = Array.isArray(existingDns) && existingDns.length > 0
+    ? existingDns.join(' ')
+    : '77.88.8.8 1.1.1.1 9.9.9.9 8.8.8.8';
+  const [dnsServers, setDnsServers] = useState<string>(initialDnsStr);
+
   const [assets, setAssets] = useState<any[]>(recipe?.assets || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -116,6 +122,16 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
     setError('');
 
     const parsedKeys = sshKeyInput.split('\n').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+    const parsedDns = dnsServers.split(/[\s,]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+
+    const existingNetCfg = recipe?.network_config && typeof recipe.network_config === 'object' ? recipe.network_config : {};
+    const existingIfaces = Array.isArray(existingNetCfg.interfaces) && existingNetCfg.interfaces.length > 0 ? existingNetCfg.interfaces : [{ match: "en* eth*", dhcp: true }];
+    const updatedIfaces = existingIfaces.map((iface: any, idx: number) => {
+      if (idx === 0) {
+        return { ...iface, dns: parsedDns };
+      }
+      return iface;
+    });
 
     const payload = {
       name: name.trim(),
@@ -141,6 +157,10 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       raw_preseed_cfg: rawPreseedCfg || null,
       raw_postinst: rawPostinst || null,
       raw_firstboot: rawFirstboot || null,
+      network_config: {
+        ...existingNetCfg,
+        interfaces: updatedIfaces,
+      },
     };
 
     try {
@@ -430,6 +450,21 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
               <p className="text-[11px] text-zinc-500">{t('sshPortHint')}</p>
             </div>
+          </div>
+
+          {/* DNS Configuration */}
+          <div className="space-y-1.5">
+            <FieldLabel hint={t('dnsServersHintTip') || 'Space-separated DNS nameservers for target OS network interfaces. Defaults to 77.88.8.8 1.1.1.1 9.9.9.9 8.8.8.8.'}>
+              {t('dnsServers') || 'DNS Servers'}
+            </FieldLabel>
+            <input
+              type="text"
+              value={dnsServers}
+              onChange={(e) => setDnsServers(e.target.value)}
+              placeholder="77.88.8.8 1.1.1.1 9.9.9.9 8.8.8.8"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+            />
+            <p className="text-[11px] text-zinc-500">{t('dnsServersHint')}</p>
           </div>
 
           {/* Credentials: root password + additional login accounts */}

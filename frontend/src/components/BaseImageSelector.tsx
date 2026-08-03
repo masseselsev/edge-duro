@@ -1,11 +1,14 @@
 import React from 'react';
 import { useTranslation } from '../context/TranslationContext';
+import FieldLabel from './FieldLabel';
 
 interface BaseImageSelectorProps {
   distribution: string;
   release: string;
   architecture: string;
+  ignoreMissingArch: boolean;
   onChange: (distro: string, release: string, arch: string) => void;
+  onIgnoreMissingArchChange: (value: boolean) => void;
 }
 
 const IMAGES = [
@@ -17,7 +20,14 @@ const IMAGES = [
   { distro: 'ubuntu', release: 'jammy', name: 'Ubuntu 22.04 (Jammy Jellyfish)', tag: 'LTS' },
 ];
 
-export default function BaseImageSelector({ distribution, release, architecture, onChange }: BaseImageSelectorProps) {
+export default function BaseImageSelector({
+  distribution,
+  release,
+  architecture,
+  ignoreMissingArch,
+  onChange,
+  onIgnoreMissingArchChange,
+}: BaseImageSelectorProps) {
   const { t } = useTranslation();
 
   return (
@@ -45,6 +55,21 @@ export default function BaseImageSelector({ distribution, release, architecture,
           ))}
         </div>
       </div>
+
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={ignoreMissingArch}
+          onChange={(e) => onIgnoreMissingArchChange(e.target.checked)}
+          className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500/40 cursor-pointer"
+        />
+        <FieldLabel
+          hint={t('ignoreMissingArchPkgsHint')}
+          className="normal-case tracking-normal font-normal cursor-pointer"
+        >
+          {t('ignoreMissingArchPkgs')}
+        </FieldLabel>
+      </label>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {IMAGES.map((img) => {

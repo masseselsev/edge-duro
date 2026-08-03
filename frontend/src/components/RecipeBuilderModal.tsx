@@ -73,6 +73,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [distribution, setDistribution] = useState(recipe?.distribution || 'debian');
   const [release, setRelease] = useState(recipe?.release || 'bookworm');
   const [architecture, setArchitecture] = useState(recipe?.architecture || 'amd64');
+  const [ignoreMissingArch, setIgnoreMissingArch] = useState(recipe?.ignore_missing_arch_packages || false);
   const [outputFormats, setOutputFormats] = useState<string[]>(recipe?.output_formats || ['raw_xz']);
   const [packages, setPackages] = useState<string[]>(recipe?.packages || []);
   const [repositories, setRepositories] = useState<AptRepo[]>(recipe?.repositories || []);
@@ -146,6 +147,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       hostname: hostname.trim() || 'edge-node',
       hostname_from_netif: hostnameFromNetif,
       is_dev: isDev,
+      ignore_missing_arch_packages: ignoreMissingArch,
       timezone: timezone || 'UTC',
       locale: locale || 'C.UTF-8',
       ssh_keys: parsedKeys,
@@ -308,11 +310,13 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             distribution={distribution}
             release={release}
             architecture={architecture}
+            ignoreMissingArch={ignoreMissingArch}
             onChange={(d, r, a) => {
               setDistribution(d);
               setRelease(r);
               setArchitecture(a);
             }}
+            onIgnoreMissingArchChange={setIgnoreMissingArch}
           />
 
           {/* Output Formats */}

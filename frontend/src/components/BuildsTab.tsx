@@ -3,6 +3,7 @@ import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText, Che
 import { useTranslation } from '../context/TranslationContext';
 import BuildLogStream from './BuildLogStream';
 import RecipeViewerModal from './RecipeViewerModal';
+import MissingPackagesModal from './MissingPackagesModal';
 import { getSavedLimit, saveLimit } from '../utils/storage';
 
 export default function BuildsTab() {
@@ -11,6 +12,7 @@ export default function BuildsTab() {
   const [loading, setLoading] = useState(true);
   const [activeLogBuild, setActiveLogBuild] = useState<any | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<any | null>(null);
+  const [missingPkgBuild, setMissingPkgBuild] = useState<any | null>(null);
 
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -106,6 +108,19 @@ export default function BuildsTab() {
                       }`}>
                         {build.status}
                       </span>
+                      {build.missing_packages?.length > 0 && (
+                        <button
+                          onClick={() => setMissingPkgBuild(build)}
+                          className={`ml-2 px-2 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
+                            build.status === 'FAILED'
+                              ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                          }`}
+                        >
+                          {(build.status === 'FAILED' ? t('missingPkgsUnavailable') : t('missingPkgsSkipped'))
+                            .replace('{n}', String(build.missing_packages.length))}
+                        </button>
+                      )}
                     </td>
                     <td className="px-6 py-3.5 text-zinc-400 font-mono">{new Date(build.created_at).toLocaleString()}</td>
                     <td className="px-6 py-3.5 text-zinc-400 font-mono">{build.duration_seconds ? `${build.duration_seconds}s` : '—'}</td>
@@ -232,6 +247,10 @@ export default function BuildsTab() {
 
       {selectedRecipe && (
         <RecipeViewerModal recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
+      )}
+
+      {missingPkgBuild && (
+        <MissingPackagesModal build={missingPkgBuild} onClose={() => setMissingPkgBuild(null)} />
       )}
     </div>
   );

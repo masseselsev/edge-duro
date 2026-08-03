@@ -6,16 +6,17 @@ import re
 from typing import List, Dict, Set
 
 
-def fetch_and_parse_packages_index(repo_url: str, suite: str, component: str = "main") -> Dict[str, str]:
+def fetch_and_parse_packages_index(repo_url: str, suite: str, component: str = "main", arch: str = "amd64") -> Dict[str, str]:
     """
-    Fetches Packages.gz for a given repository, suite, and component,
+    Fetches Packages.gz for a given repository, suite, component, and architecture,
     and returns a mapping of package_name -> deb_url.
     """
     base_repo_url = repo_url.rstrip("/")
+    debian_arch = "arm64" if arch in ["arm64", "aarch64"] else "amd64"
     # Build URL to Packages.gz
-    # Example: https://edge.vitcompany.com/repo/bookworm/stable/dists/bookworm/main/binary-amd64/Packages.gz
-    packages_gz_url = f"{base_repo_url}/dists/{suite}/{component}/binary-amd64/Packages.gz"
-    packages_url = f"{base_repo_url}/dists/{suite}/{component}/binary-amd64/Packages"
+    # Example: https://edge.vitcompany.com/repo/bookworm/stable/dists/bookworm/main/binary-arm64/Packages.gz
+    packages_gz_url = f"{base_repo_url}/dists/{suite}/{component}/binary-{debian_arch}/Packages.gz"
+    packages_url = f"{base_repo_url}/dists/{suite}/{component}/binary-{debian_arch}/Packages"
 
     package_deb_map = {}
     content_str = ""
@@ -103,7 +104,8 @@ def download_edge_packages(recipe, workspace_path: str) -> List[str]:
             url = r.get("url")
             suite = r.get("suite") or rel
             comp = r.get("components") or "main"
-            repo_map = fetch_and_parse_packages_index(url, suite, comp)
+            recipe_arch = getattr(recipe, "architecture", "amd64") or "amd64"
+            repo_map = fetch_and_parse_packages_index(url, suite, comp, arch=recipe_arch)
             master_map.update(repo_map)
 
     downloaded_files = []

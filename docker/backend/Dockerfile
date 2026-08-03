@@ -6,6 +6,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
     grub-efi-amd64-bin grub-pc-bin grub-common \
     ubuntu-keyring debian-archive-keyring \
     busybox-static xz-utils cpio \
+    qemu-user-static \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .

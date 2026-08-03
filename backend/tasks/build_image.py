@@ -30,11 +30,12 @@ def build_image_task(self, build_id: str, recipe_id: int):
         # 1. Prepare Workspace & Extra Tree
         log_to_task(build_id, "[STEP 1/4] Preparing workspace directory and overlay filesystem...")
         ws_path = prepare_workspace(recipe.id, recipe)
-        populate_extra_tree(recipe, assets, ws_path)
 
         # Verify every package exists for the target architecture before mkosi
         # starts. Without this apt kills the build ten minutes in, and the log
-        # gives no hint which package has no arm64 build.
+        # gives no hint which package has no arm64 build. It runs before the
+        # overlay tree is populated because it also decides which repositories
+        # are worth writing into the image's sources.list.d.
         from core.arch_check import check_recipe_packages, has_critical
 
         exclude = frozenset()
@@ -64,6 +65,12 @@ def build_image_task(self, build_id: str, recipe_id: int):
             for m in check.missing:
                 log_to_task(build_id, f"[ARCH CHECK]   - {m['name']} ({m['source']})")
 
+        skip_repo_urls = frozenset(check.absent_repos)
+        for url in check.absent_repos:
+            log_to_task(build_id, f"[ARCH CHECK] Leaving {url} out of the image's APT sources -- it publishes nothing for {recipe.architecture}.")
+
+        populate_extra_tree(recipe, assets, ws_path, skip_repo_urls=skip_repo_urls)
+
         # Pre-download all Edge platform packages into mkosi.extra/opt/edge_packages/
         try:
             from core.repo_downloader import download_edge_packages
@@ -74,7 +81,7 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         # 2. Generate mkosi.conf
         log_to_task(build_id, "[STEP 2/4] Generating mkosi.conf recipe configuration...")
-        generate_mkosi_conf(recipe, ws_path, exclude=exclude)
+        generate_mkosi_conf(recipe, ws_path, exclude=exclude, skip_repo_urls=skip_repo_urls)
 
         # 3. Execute mkosi build process
         log_to_task(build_id, "[STEP 3/4] Invoking mkosi systemd-nspawn build engine...")
@@ -82,7 +89,6 @@ def build_image_task(self, build_id: str, recipe_id: int):
         # Clean existing output directory if present
         shutil.rmtree(os.path.join(ws_path, "output"), ignore_errors=True)
 
-        stdbuf_bin = shutil.which("stdbuf")
         mkosi_bin = shutil.which("mkosi")
         if not mkosi_bin:
             log_to_task(build_id, "[WARNING] 'mkosi' binary not found in worker container PATH. Running in simulated build mode...")
@@ -121,9 +127,15 @@ def build_image_task(self, build_id: str, recipe_id: int):
         line_buffer = b""
 
         from core import apt_diagnostics
+        from core.log_throttle import RepeatCollapser
+
         # apt's complaints are kept aside: in the full log they drown among
         # thousands of lines, and they only matter if mkosi actually failed.
         apt_diag_lines = []
+        # A stuck apt repeats one line indefinitely -- 39888 copies of the same
+        # warning in one observed run. Every line is written to Postgres, so
+        # runs of identical lines are collapsed before they get there.
+        collapser = RepeatCollapser()
 
         while True:
             try:
@@ -167,7 +179,8 @@ def build_image_task(self, build_id: str, recipe_id: int):
                             log_to_task(build_id, clean_line)
                         continue
 
-                    log_to_task(build_id, clean_line)
+                    for out_line in collapser.feed(clean_line):
+                        log_to_task(build_id, out_line)
 
                     if len(apt_diag_lines) < 200 and apt_diagnostics.is_diagnostic_line(clean_line):
                         apt_diag_lines.append(clean_line)
@@ -182,6 +195,8 @@ def build_image_task(self, build_id: str, recipe_id: int):
                                 log_to_task(build_id, "[SYSTEM] Process termination requested by user. Terminating mkosi...")
                                 process.terminate()
                                 process.wait(timeout=5)
+                                for out_line in collapser.flush():
+                                    log_to_task(build_id, out_line)
                                 master_file.close()
                                 return
                         except Exception:
@@ -198,7 +213,12 @@ def build_image_task(self, build_id: str, recipe_id: int):
                 for rem_line in remaining.split('\n'):
                     rem_line = rem_line.strip()
                     if rem_line:
-                        log_to_task(build_id, rem_line)
+                        for out_line in collapser.feed(rem_line):
+                            log_to_task(build_id, out_line)
+
+        # Close the last run of repeated lines so its count reaches the log.
+        for out_line in collapser.flush():
+            log_to_task(build_id, out_line)
 
         master_file.close()
 
@@ -225,7 +245,6 @@ def build_image_task(self, build_id: str, recipe_id: int):
         os.makedirs(outputs_dir, exist_ok=True)
 
         src_output = os.path.join(ws_path, "output")
-        uncompressed_raw_path = None
         target_raw_file = None
 
         if os.path.exists(src_output) and os.listdir(src_output):
@@ -264,7 +283,6 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         if target_raw_file:
             if not target_raw_file.endswith(".xz"):
-                uncompressed_raw_path = target_raw_file
                 total_bytes = os.path.getsize(target_raw_file)
                 # DEBUG: use 85% of CPUs while tuning; revert to conc-quota formula later
                 cpu_threads = max(1, int((os.cpu_count() or 2) * 0.85))

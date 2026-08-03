@@ -50,6 +50,13 @@ Both **ISO** installer and **RAW.XZ** disk image output artifacts strictly adher
 ### 🌐 7. Multi-Language Support (i18n)
 - Full internationalization support in English (EN), Russian (RU), and Ukrainian (UK).
 
+### 🧩 8. Architecture-Aware Package Skipping
+- Before `mkosi` runs, every package a recipe resolves to is checked against the `binary-<arch>` indices of both the configured Edge repositories and the official distribution mirror. Index names are cached on disk for a day, so the multi-megabyte distribution index is fetched at most once per day rather than per build.
+- With **Skip packages missing for this architecture** enabled on the recipe, unavailable packages are dropped from the build and listed per build in the history; without it the build fails in seconds with the exact list instead of dying inside `apt` minutes later.
+- Packages required to boot (kernel, `apt`, `bash`, `systemd-boot`, …) are never skipped. `edge-*` packages are skippable, so an arm64 image builds before arm64 platform packages exist.
+- An unreachable index means "unknown", not "missing": if any index fails to load the whole check is skipped, so a mirror outage can never silently drop packages from an image.
+- When `apt` fails on a dependency the name-level check cannot see, the offending package names are parsed out of the log and appended to the same list.
+
 ---
 
 ## 🔌 Default Exposed Ports

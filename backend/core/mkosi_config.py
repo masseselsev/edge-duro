@@ -1,44 +1,24 @@
 import os
 from models import Recipe
+from core.packages import resolve_package_list
 
 
-def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
+def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()) -> str:
     """
     Generates mkosi.conf configuration for systemd image builder and
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
+
+    exclude -- имена пакетов, которых нет под архитектуру рецепта; их вычеркнула
+    предполётная проверка (core/arch_check.py).
     """
-    pkgs = list(recipe.packages) if recipe.packages else ["systemd", "systemd-sysv", "dbus", "iproute2"]
-    # "login" provides /bin/login, which agetty execs by default for BOTH manual
-    # getty prompts and Autologin=yes (mkosi's autologin unit still shells out to
-    # it with -f). With WithRecommends=no nothing pulls it in as a dependency of
-    # systemd/bash/coreutils, so every console -- autologin or manual -- exec()s
-    # a binary that doesn't exist: agetty prints the login prompt, the user types
-    # a name, Enter is echoed by the kernel tty layer, and then nothing, because
-    # there is no process left to read it.
-    # "sudo" provides /usr/bin/sudo and the /etc/sudoers.d/ rule granting the
-    # "sudo" group root access. Without it, adding a user to the "sudo" group
-    # (via workspace.py's groupadd -f) creates an inert group -- nothing on the
-    # system checks membership in it, so the recipe's sudo checkbox would
-    # silently grant nothing on a recipe that happens not to list this package.
-    for req_pkg in ["apt", "bash", "coreutils", "login", "sudo", "systemd-boot", "systemd-sysv", "initramfs-tools"]:
-        if req_pkg not in pkgs:
-            pkgs.append(req_pkg)
+    # Only standard distribution packages reach mkosi -- Edge packages are
+    # pre-downloaded and installed via dpkg. dracut-core is in the list so mkosi
+    # delegates initrd generation to it: dracut builds non-hostonly initrds which
+    # include all generic storage modules (virtio_blk, etc).
+    std_pkgs, _ = resolve_package_list(recipe, exclude=exclude)
+    packages_formatted = "\n    ".join(std_pkgs)
 
     distro = (recipe.distribution or "debian").lower()
-    if "debian" in distro and not any("linux-image" in p.lower() for p in pkgs):
-        pkgs.append("linux-image-amd64")
-    elif "ubuntu" in distro and not any("linux-image" in p.lower() for p in pkgs):
-        pkgs.append("linux-image-generic")
-
-    # Standard distribution packages only for mkosi base build (Edge packages are pre-downloaded and installed via dpkg)
-    std_pkgs = [p for p in pkgs if not p.lower().startswith("edge-")]
-    
-    # Ensure dracut-core is installed so mkosi delegates initrd generation to it
-    # dracut builds non-hostonly initrds which include all generic storage modules (virtio_blk, etc)
-    if "dracut-core" not in std_pkgs:
-        std_pkgs.append("dracut-core")
-        
-    packages_formatted = "\n    ".join(std_pkgs)
 
     arch_map = {
         "amd64": "x86-64",
@@ -82,38 +62,15 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str) -> str:
     if "debian" in distro:
         mkosi_distro = "debian"
         components = "main contrib non-free non-free-firmware"
-        pkg_map = {
-            "linux-image-generic": "linux-image-amd64",
-            "linux-firmware": "firmware-misc-nonfree intel-microcode firmware-sof-signed",
-            "acpi-support": "acpi-support-base",
-            "intel-media-driver": "intel-media-va-driver-non-free",
-        }
         remove_files = COMMON_REMOVE_FILES
     elif "ubuntu" in distro:
         mkosi_distro = "ubuntu"
         components = "main restricted universe multiverse"
-        pkg_map = {
-            "linux-image-amd64": "linux-image-generic",
-            "firmware-misc-nonfree": "intel-microcode firmware-sof-signed",
-            "acpi-support-base": "",
-            "acpi-support": "",
-            "intel-media-va-driver-non-free": "intel-media-va-driver",
-        }
         remove_files = COMMON_REMOVE_FILES
     else:
         mkosi_distro = recipe.distribution
         components = "main"
-        pkg_map = {}
         remove_files = COMMON_REMOVE_FILES
-
-    mapped_pkgs = []
-    for p in std_pkgs:
-        mapped_val = pkg_map.get(p.lower(), p)
-        if mapped_val:
-            mapped_pkgs.extend(mapped_val.split())
-    std_pkgs = mapped_pkgs
-
-    packages_formatted = "\n    ".join(std_pkgs)
 
     # Inject APT sources list into mkosi.extra tree
     extra_apt_dir = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "sources.list.d")

@@ -73,6 +73,11 @@ class Recipe(Base):
     # so a dev image can never be mistaken for a release one on a shared share.
     is_dev = Column(Boolean, default=False, nullable=False)
 
+    # Пакетов под arm64 может ещё не существовать. С этим флагом недоступные
+    # под архитектуру пакеты вычёркиваются из сборки, а не валят её, и попадают
+    # в builds.missing_packages.
+    ignore_missing_arch_packages = Column(Boolean, default=False, nullable=False)
+
     kernel_params = Column(String, nullable=True)
     partitions = Column(JSON, nullable=False, default=list)
     raw_mkosi_conf = Column(Text, nullable=True)
@@ -106,6 +111,8 @@ class Build(Base):
     iso_artifact_size = Column(BigInteger, nullable=True)
     output_format = Column(String, nullable=True) # raw_xz, iso
     duration_seconds = Column(Integer, nullable=True)
+    # [{"name": ..., "source": "edge"|"apt", "reason": "not_in_index"|"critical"|"dependency", "detail": ...}]
+    missing_packages = Column(JSON, nullable=False, default=list)
 
     recipe = relationship("Recipe", lazy="joined")
 

@@ -162,6 +162,7 @@ class RecipeBase(BaseModel):
     root_password: Optional[str] = None
     users: List[UserAccountSchema] = Field(default_factory=list)
     is_dev: bool = Field(default=False)
+    ignore_missing_arch_packages: bool = Field(default=False)
     kernel_params: Optional[str] = "ipv6.disable=1 nohz=off"
     partitions: List[PartitionSchema] = Field(default_factory=lambda: [
         {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},
@@ -224,6 +225,7 @@ class BuildResponse(UTCModel):
     iso_artifact_size: Optional[int] = None
     output_format: Optional[str] = None
     duration_seconds: Optional[int] = None
+    missing_packages: List[Dict[str, Any]] = Field(default_factory=list)
     recipe: Optional[RecipeResponse] = None
 
 

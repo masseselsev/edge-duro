@@ -93,6 +93,7 @@ def list_builds(
             iso_artifact_size=b.iso_artifact_size,
             output_format=b.output_format,
             duration_seconds=b.duration_seconds,
+            missing_packages=b.missing_packages or [],
             recipe=recipe_resp
         ))
 

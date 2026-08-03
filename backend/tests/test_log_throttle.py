@@ -47,14 +47,30 @@ def test_singular_and_plural_wording():
 def test_periodic_heartbeat_keeps_a_long_run_visible():
     """
     Полностью немой лог на получасовом цикле не даёт понять, жив ли билд,
-    поэтому очень длинный повтор отмечается каждые heartbeat строк.
+    поэтому длинный повтор отмечается -- но с геометрическим шагом.
     """
     c = RepeatCollapser(heartbeat=5)
     c.feed("same")
     out = []
-    for _ in range(11):
+    for _ in range(60):
         out.extend(c.feed("same"))
-    assert out == ["[still repeating, 5 times]", "[still repeating, 10 times]"]
+    assert out == [
+        "[still repeating, 5 times]",
+        "[still repeating, 50 times]",
+    ]
+
+
+def test_heartbeat_stays_bounded_on_a_runaway_loop():
+    """
+    Наблюдалось 6.4 млн повторов одной строки. С линейным шагом это дало бы
+    почти 13 тысяч строк в базу на один пакет.
+    """
+    c = RepeatCollapser(heartbeat=500)
+    c.feed("same")
+    emitted = 0
+    for _ in range(6_500_000):
+        emitted += len(c.feed("same"))
+    assert emitted <= 6, f"runaway loop produced {emitted} heartbeat lines"
 
 
 def test_repeat_counter_resets_between_runs():

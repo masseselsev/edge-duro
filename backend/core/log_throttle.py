@@ -21,8 +21,11 @@ class RepeatCollapser:
 
     def __init__(self, heartbeat: int = 500):
         # Совсем немой лог не даёт отличить зависание от медленной работы,
-        # поэтому длинный повтор всё же отмечается раз в heartbeat строк.
+        # поэтому длинный повтор всё же отмечается -- но с геометрическим
+        # шагом: наблюдался цикл на 6.4 млн повторов одной строки, и при
+        # постоянном шаге он всё равно положил бы в базу тысячи строк.
         self._heartbeat = heartbeat
+        self._next_heartbeat = heartbeat
         self._last: Optional[str] = None
         self._repeats = 0
 
@@ -34,19 +37,21 @@ class RepeatCollapser:
     def feed(self, line: str) -> List[str]:
         if line == self._last:
             self._repeats += 1
-            if self._heartbeat and self._repeats % self._heartbeat == 0:
+            if self._heartbeat and self._repeats >= self._next_heartbeat:
+                self._next_heartbeat *= 10
                 return [f"[still repeating, {self._repeats} times]"]
             return []
 
         out = self.flush()
         self._last = line
-        self._repeats = 0
         out.append(line)
         return out
 
     def flush(self) -> List[str]:
+        self._next_heartbeat = self._heartbeat
         if self._repeats:
             out = [self._summary(self._repeats)]
             self._repeats = 0
             return out
+        self._repeats = 0
         return []

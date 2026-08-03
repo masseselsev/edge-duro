@@ -3,13 +3,16 @@ from models import Recipe
 from core.packages import resolve_package_list
 
 
-def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()) -> str:
+def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset(),
+                        skip_repo_urls=frozenset()) -> str:
     """
     Generates mkosi.conf configuration for systemd image builder and
     injects custom APT repositories into mkosi.extra/etc/apt/sources.list.d/
 
     exclude -- имена пакетов, которых нет под архитектуру рецепта; их вычеркнула
     предполётная проверка (core/arch_check.py).
+    skip_repo_urls -- репозитории, не публикующие индекс под эту архитектуру;
+    в sources.list.d образа они не попадают.
     """
     # Only standard distribution packages reach mkosi -- Edge packages are
     # pre-downloaded and installed via dpkg. dracut-core is in the list so mkosi
@@ -84,13 +87,20 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
         for repo in recipe.repositories:
             if isinstance(repo, dict) and repo.get("url"):
                 url = repo.get("url")
+                if url in skip_repo_urls:
+                    continue
                 suite = repo.get("suite") or rel
                 comp = repo.get("components") or "main"
                 sources_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
 
+    custom_list = os.path.join(extra_apt_dir, "custom.list")
     if sources_lines:
-        with open(os.path.join(extra_apt_dir, "custom.list"), "w") as f:
+        with open(custom_list, "w") as f:
             f.write("\n".join(sources_lines) + "\n")
+    elif os.path.exists(custom_list):
+        # The workspace is reused between builds: without this, sources written
+        # by an earlier run would survive into an image that must not have them.
+        os.remove(custom_list)
 
     # Force IPv4 for APT to prevent IPv6 blackhole hangs during package download
     apt_conf_dir = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "apt.conf.d")

@@ -112,7 +112,8 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
     return recipe_ws
 
 
-def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_path: str):
+def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_path: str,
+                        skip_repo_urls=frozenset()):
     """
     Populates mkosi.extra/ overlay tree with SSH keys, custom APT repositories, assets, postinst, firstboot, and preseed files.
     """
@@ -223,16 +224,27 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         for repo in recipe.repositories:
             if isinstance(repo, dict) and repo.get("url"):
                 url = repo.get("url")
+                # A repository that publishes nothing for this architecture is
+                # left out: shipping it would make `apt update` on the device
+                # fail with 404 on every run, forever.
+                if url in skip_repo_urls:
+                    continue
                 suite = repo.get("suite") or rel
                 comp = repo.get("components") or "main"
                 repo_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
 
-    if repo_lines:
-        for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
-            sources_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "sources.list.d")
-            os.makedirs(sources_dir, exist_ok=True)
-            with open(os.path.join(sources_dir, "custom.list"), "w") as f:
+    for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
+        sources_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "sources.list.d")
+        os.makedirs(sources_dir, exist_ok=True)
+        custom_list = os.path.join(sources_dir, "custom.list")
+        if repo_lines:
+            with open(custom_list, "w") as f:
                 f.write("\n".join(repo_lines) + "\n")
+        elif os.path.exists(custom_list):
+            # The workspace is reused between builds, so a file written by an
+            # earlier run would otherwise survive into an image that must not
+            # carry these sources any more.
+            os.remove(custom_list)
 
     # 3. Assets overlay
     # asset_hook_cmds collects assets flagged "Register as Post-Install Hook";

@@ -194,7 +194,7 @@ def delete_single_artifact(
         log_user_action(db, current_user.username, "DELETE_STORAGE_ARTIFACT", f"Deleted storage artifact '{filename}'", request)
         return {"status": "success", "message": f"Artifact '{filename}' deleted successfully."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete artifact: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete artifact: {e}") from e
 
 
 @router.post("/artifacts/bulk-delete")

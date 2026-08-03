@@ -15,7 +15,7 @@ if config.config_file_name is not None:
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import Base
-import models
+import models  # noqa: F401  -- наполняет Base.metadata для autogenerate
 
 target_metadata = Base.metadata
 

@@ -51,7 +51,7 @@ def trigger_build(
         build.status = "FAILED"
         build.log_output += f"[ERROR] Failed to dispatch Celery worker task: {e}\n"
         db.commit()
-        raise HTTPException(status_code=500, detail=f"Failed to dispatch build task: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to dispatch build task: {e}") from e
 
     log_user_action(db, current_user.username, "TRIGGER_BUILD", f"Triggered build '{build_id}' for recipe '{recipe.name}'", request)
     return {"build_id": build_id, "status": "PENDING", "message": "Build task dispatched successfully."}

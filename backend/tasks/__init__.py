@@ -85,6 +85,7 @@ def log_to_task(task_id: str, message: str, status: str = None, replace_last: bo
         db.close()
 
 
-from tasks.build_image import build_image_task
-from tasks.generate_iso import generate_iso_task
-from tasks.cleanup import workspace_cleanup_task
+# Импортируются ради побочного эффекта: только так Celery узнаёт о задачах.
+from tasks.build_image import build_image_task  # noqa: F401
+from tasks.generate_iso import generate_iso_task  # noqa: F401
+from tasks.cleanup import workspace_cleanup_task  # noqa: F401

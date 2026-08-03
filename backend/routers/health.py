@@ -3,7 +3,7 @@ import time
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 

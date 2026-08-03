@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from typing import Union, List, Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 import jwt
 import bcrypt
@@ -66,8 +66,8 @@ def get_current_auth(request: Request = None, db: Session = Depends(get_db)) -> 
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         return user
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token signature")
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token signature") from e
 
 
 def require_admin(current_user: models.User = Depends(get_current_auth)) -> models.User:

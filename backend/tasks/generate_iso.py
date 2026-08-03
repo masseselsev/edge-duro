@@ -322,7 +322,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                         log_to_task(build_id, "[ISO WARNING] Could not determine kernel version from /lib/modules. Skipping isofs injection.")
                     else:
                         injected_any = False
-                        for extra_mod, original_path in [
+                        for _extra_mod, original_path in [
                             ("isofs.ko", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko"),
                             ("isofs.ko.zst", f"/lib/modules/{kver}/kernel/fs/isofs/isofs.ko.zst")
                         ]:
@@ -350,7 +350,7 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
                                 shell=True
                             )
                             if append_res.returncode == 0:
-                                log_to_task(build_id, f"[ISO] Successfully appended ISO modules to initrd.img")
+                                log_to_task(build_id, "[ISO] Successfully appended ISO modules to initrd.img")
                             else:
                                 log_to_task(build_id, "[ISO WARNING] Failed to append micro-initrd to initrd.img")
                         else:

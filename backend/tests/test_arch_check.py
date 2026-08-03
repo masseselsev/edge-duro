@@ -113,6 +113,94 @@ def test_partial_failure_also_disables_the_check():
     assert result.missing == []
 
 
+def test_absent_index_reports_its_packages_instead_of_disabling_the_check():
+    """
+    Репозиторий Edge отдаёт 404 на binary-arm64, пока arm64-пакетов нет. Это
+    достоверный ответ "сборок под эту архитектуру нет", а не сбой сети, и
+    проверка обязана продолжиться и назвать эти пакеты.
+    """
+    def fetch(url, _suite, _component, _arch):
+        return arch_check.INDEX_ABSENT if "edge.example" in url else INDEX
+
+    recipe = make_recipe(
+        architecture="arm64",
+        packages=["nginx-full", "edge-target-puma"],
+        repositories=[{"url": "https://edge.example/repo/bookworm/stable",
+                       "suite": "bookworm", "components": "main"}],
+    )
+    result = arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=fetch)
+
+    assert result.checked
+    assert result.unreachable == []
+    names = {m["name"] for m in result.missing}
+    assert "edge-target-puma" in names
+    assert "edge-base" in names
+    assert "nginx-full" not in names
+
+
+def test_all_official_indices_absent_disables_the_check():
+    """
+    Официальное зеркало без единого индекса значит, что мы спрашиваем не то
+    (опечатка в release), а не что в Debian не осталось пакетов. Объявлять
+    отсутствующим весь список нельзя.
+    """
+    recipe = make_recipe(architecture="arm64", packages=["nginx-full"])
+    result = arch_check.check_recipe_packages(
+        recipe, log=lambda _m: None,
+        fetch=lambda *_a: arch_check.INDEX_ABSENT,
+    )
+
+    assert not result.checked
+    assert result.missing == []
+
+
+def test_fetch_maps_404_to_absent(monkeypatch):
+    monkeypatch.setattr(arch_check, "_http_get", lambda url, timeout=30: (404, None))
+    assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is arch_check.INDEX_ABSENT
+
+
+def test_fetch_maps_network_failure_to_unknown(monkeypatch):
+    monkeypatch.setattr(arch_check, "_http_get", lambda url, timeout=30: (None, None))
+    assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is None
+
+
+def test_fetch_treats_a_mix_of_404_and_network_failure_as_unknown(monkeypatch):
+    def flaky(url, timeout=30):
+        return (404, None) if url.endswith(".gz") else (None, None)
+
+    monkeypatch.setattr(arch_check, "_http_get", flaky)
+    assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is None
+
+
+def test_absent_index_is_not_cached(monkeypatch):
+    """Кеш на сутки заморозил бы 404 и после того, как arm64-пакеты выйдут."""
+    calls = {"n": 0}
+
+    def counting(*_a):
+        calls["n"] += 1
+        return arch_check.INDEX_ABSENT
+
+    recipe = make_recipe(
+        architecture="arm64",
+        packages=["nginx-full"],
+        repositories=[{"url": "https://edge.example/repo/bookworm/stable",
+                       "suite": "bookworm", "components": "main"}],
+    )
+
+    def fetch(url, suite, component, arch):
+        return arch_check.INDEX_ABSENT if "edge.example" in url else INDEX
+
+    arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=fetch)
+    seen = []
+
+    def spy(url, suite, component, arch):
+        seen.append(url)
+        return arch_check.INDEX_ABSENT if "edge.example" in url else INDEX
+
+    arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=spy)
+    assert any("edge.example" in u for u in seen), "absent index must be re-fetched, not served from cache"
+
+
 def test_second_check_is_served_from_the_disk_cache():
     calls = {"n": 0}
 

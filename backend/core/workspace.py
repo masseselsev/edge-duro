@@ -22,7 +22,12 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
         "mkosi.extra/root/.ssh",
         "mkosi.extra/etc/network/interfaces.d",
         "mkosi.extra/etc/initramfs-tools",
-        "mkosi.extra/opt/custom"
+        "mkosi.extra/opt/custom",
+        # mkosi.conf declares SkeletonTrees=mkosi.skeleton unconditionally, and
+        # mkosi aborts with "mkosi.skeleton does not exist" when the directory
+        # is absent. populate_extra_tree only creates it for recipes that have
+        # custom APT repositories, so a recipe without any never built.
+        "mkosi.skeleton/etc/apt/sources.list.d",
     ]
 
     # Clean stale hook scripts from previous runs

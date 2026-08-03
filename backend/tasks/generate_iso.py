@@ -104,13 +104,23 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
         raw_candidates.sort(key=lambda f: os.path.getsize(f), reverse=True)
         target_raw = raw_candidates[0] if raw_candidates else None
 
-        # 1. Enforce mandatory edge-base package presence
+        # 1. Enforce mandatory edge-base package presence.
+        #
+        # Unless the architecture check deliberately skipped it: an arm64 image
+        # is expected to build before the arm64 platform packages exist, and
+        # the naming below already copes with an unknown version. A missing
+        # edge-base that nobody skipped still means the build went wrong.
+        from core.packages import was_deliberately_skipped
+
         log_content = build.log_output if build else None
         edge_base_ver = extract_edge_base_version(ws_path, target_raw, log_content)
         if not edge_base_ver:
-            error_msg = "[ISO ERROR] Mandatory package 'edge-base' is missing from rootfs dpkg database! Aborting ISO generation."
-            log_to_task(build_id, error_msg, status="FAILED")
-            return
+            skipped = build and was_deliberately_skipped("edge-base", build.missing_packages)
+            if not skipped:
+                error_msg = "[ISO ERROR] Mandatory package 'edge-base' is missing from rootfs dpkg database! Aborting ISO generation."
+                log_to_task(build_id, error_msg, status="FAILED")
+                return
+            log_to_task(build_id, f"[ISO] Building without edge-base -- it has no build for {recipe.architecture if recipe else 'this architecture'} and was skipped. The ISO name will carry no edge-base version.")
 
         # 2. Strict Naming Rule: edge_{EDGE_BASE_VERSION}_{ARCH}-{RELEASE}-auto.iso
         arch = (recipe.architecture if recipe and recipe.architecture else "amd64").lower()
@@ -127,7 +137,8 @@ def generate_iso_task(build_id: str, ws_path: str, recipe_id: int):
             iso_filename = f"{prefix}_{arch}-{rel}_{ts_suffix}.iso"
         final_iso_path = os.path.join(outputs_dir, iso_filename)
 
-        log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")
+        if edge_base_ver:
+            log_to_task(build_id, f"[ISO INFO] Verified edge-base package version: {edge_base_ver}")
 
         if target_raw:
             log_to_task(build_id, f"[ISO EXEC] Processing raw image '{os.path.basename(target_raw)}' ({os.path.getsize(target_raw)} bytes) into UEFI El Torito ISO...")

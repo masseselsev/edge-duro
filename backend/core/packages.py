@@ -66,6 +66,21 @@ def is_critical(name: str) -> bool:
     return name in CRITICAL_PACKAGES or name.startswith(_KERNEL_PREFIX)
 
 
+def was_deliberately_skipped(name: str, missing_packages) -> bool:
+    """
+    Пропущен ли пакет предполётной проверкой намеренно.
+
+    Отличает "под эту архитектуру сборки нет, и мы согласились собирать без
+    него" от "должен был встать и не встал". Записи с reason="dependency"
+    добавляет разбор ошибок apt уже после падения сборки -- это отказ, а не
+    осознанный пропуск.
+    """
+    for entry in (missing_packages or []):
+        if entry.get("name") == name and entry.get("reason") in ("not_in_index", "critical"):
+            return True
+    return False
+
+
 def distro_family(distribution: Any) -> str:
     distro = (distribution or "debian").lower()
     if "ubuntu" in distro:

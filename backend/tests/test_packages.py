@@ -4,6 +4,7 @@ from core.packages import (
     is_critical,
     kernel_package,
     resolve_package_list,
+    was_deliberately_skipped,
 )
 
 
@@ -69,6 +70,31 @@ def test_exclude_applies_to_mapped_names():
     )
     assert "intel-microcode" not in std
     assert "firmware-misc-nonfree" in std
+
+
+def test_deliberately_skipped_recognises_a_recorded_package():
+    missing = [
+        {"name": "edge-base", "source": "edge", "reason": "not_in_index"},
+        {"name": "intel-microcode", "source": "apt", "reason": "not_in_index"},
+    ]
+    assert was_deliberately_skipped("edge-base", missing)
+    assert was_deliberately_skipped("intel-microcode", missing)
+
+
+def test_deliberately_skipped_is_false_for_anything_else():
+    missing = [{"name": "edge-base", "source": "edge", "reason": "not_in_index"}]
+    assert not was_deliberately_skipped("edge-timekeeper", missing)
+    assert not was_deliberately_skipped("edge-base", [])
+    assert not was_deliberately_skipped("edge-base", None)
+
+
+def test_a_dependency_failure_does_not_count_as_deliberate():
+    """
+    Пакет, который apt не смог разрешить уже во время сборки, попадает в тот же
+    список, но это отказ, а не осознанный пропуск.
+    """
+    missing = [{"name": "edge-base", "source": "edge", "reason": "dependency"}]
+    assert not was_deliberately_skipped("edge-base", missing)
 
 
 def test_edge_base_is_not_critical():

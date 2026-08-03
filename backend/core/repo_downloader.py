@@ -62,11 +62,14 @@ def fetch_and_parse_packages_index(repo_url: str, suite: str, component: str = "
     return package_deb_map
 
 
-def download_edge_packages(recipe, workspace_path: str) -> List[str]:
+def download_edge_packages(recipe, workspace_path: str, exclude=frozenset()) -> List[str]:
     """
     Pre-downloads all Edge platform .deb packages for a recipe into
     workspace/mkosi.extra/opt/edge_packages/ so they can be installed via dpkg -i.
     Returns list of downloaded package file paths.
+
+    exclude -- пакеты, которых нет под архитектуру рецепта; их уже вычеркнула
+    предполётная проверка (core/arch_check.py).
     """
     dest_dir = os.path.join(workspace_path, "mkosi.extra", "opt", "edge_packages")
     if os.path.exists(dest_dir):
@@ -74,16 +77,12 @@ def download_edge_packages(recipe, workspace_path: str) -> List[str]:
         shutil.rmtree(dest_dir, ignore_errors=True)
     os.makedirs(dest_dir, exist_ok=True)
 
-    # Determine packages to fetch
-    requested_pkgs: Set[str] = set()
-    if recipe.packages:
-        for p in recipe.packages:
-            if p.lower().startswith("edge-"):
-                requested_pkgs.add(p)
-
-    # Always ensure core Edge base packages are included
-    requested_pkgs.add("edge-base")
-    requested_pkgs.add("edge-python3-core")
+    # Determine packages to fetch. The list (including the always-present core
+    # Edge packages) comes from core.packages so the pre-flight architecture
+    # check and the downloader can never disagree about what a recipe needs.
+    from core.packages import resolve_package_list
+    _, edge_pkgs = resolve_package_list(recipe, exclude=exclude)
+    requested_pkgs: Set[str] = set(edge_pkgs)
 
     print(f"[REPO DOWNLOADER] Resolving Edge packages: {sorted(list(requested_pkgs))}...")
 

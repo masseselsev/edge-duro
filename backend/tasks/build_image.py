@@ -32,17 +32,49 @@ def build_image_task(self, build_id: str, recipe_id: int):
         ws_path = prepare_workspace(recipe.id, recipe)
         populate_extra_tree(recipe, assets, ws_path)
 
+        # Verify every package exists for the target architecture before mkosi
+        # starts. Without this apt kills the build ten minutes in, and the log
+        # gives no hint which package has no arm64 build.
+        from core.arch_check import check_recipe_packages, has_critical
+
+        exclude = frozenset()
+        log_to_task(build_id, f"Verifying package availability for {recipe.architecture}...")
+        check = check_recipe_packages(recipe, log=lambda m: log_to_task(build_id, m))
+
+        if check.missing:
+            build.missing_packages = list(check.missing)
+            db.commit()
+
+            summary = ", ".join(f"{m['name']} ({m['source']})" for m in check.missing)
+            critical = [m["name"] for m in check.missing if m["reason"] == "critical"]
+
+            if has_critical(check):
+                raise RuntimeError(
+                    f"Packages required for a bootable image are not available for "
+                    f"{recipe.architecture}: {', '.join(critical)}. These are never skipped."
+                )
+            if not recipe.ignore_missing_arch_packages:
+                raise RuntimeError(
+                    f"{len(check.missing)} package(s) not available for {recipe.architecture}: {summary}. "
+                    f"Enable 'skip packages missing for this architecture' in the recipe to build anyway."
+                )
+
+            exclude = frozenset(m["name"] for m in check.missing)
+            log_to_task(build_id, f"[ARCH CHECK] Skipping {len(check.missing)} package(s) unavailable for {recipe.architecture}:")
+            for m in check.missing:
+                log_to_task(build_id, f"[ARCH CHECK]   - {m['name']} ({m['source']})")
+
         # Pre-download all Edge platform packages into mkosi.extra/opt/edge_packages/
         try:
             from core.repo_downloader import download_edge_packages
-            dl_files = download_edge_packages(recipe, ws_path)
+            dl_files = download_edge_packages(recipe, ws_path, exclude=exclude)
             log_to_task(build_id, f"[REPO DOWNLOADER] Pre-downloaded {len(dl_files)} Edge platform .deb packages directly.")
         except Exception as e:
             log_to_task(build_id, f"[REPO DOWNLOADER WARNING] Failed to pre-download Edge packages: {e}")
 
         # 2. Generate mkosi.conf
         log_to_task(build_id, "[STEP 2/4] Generating mkosi.conf recipe configuration...")
-        generate_mkosi_conf(recipe, ws_path)
+        generate_mkosi_conf(recipe, ws_path, exclude=exclude)
 
         # 3. Execute mkosi build process
         log_to_task(build_id, "[STEP 3/4] Invoking mkosi systemd-nspawn build engine...")
@@ -88,6 +120,11 @@ def build_image_task(self, build_id: str, recipe_id: int):
         last_cancel_check = 0.0
         line_buffer = b""
 
+        from core import apt_diagnostics
+        # apt's complaints are kept aside: in the full log they drown among
+        # thousands of lines, and they only matter if mkosi actually failed.
+        apt_diag_lines = []
+
         while True:
             try:
                 chunk = master_file.read(1024)
@@ -132,6 +169,9 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
                     log_to_task(build_id, clean_line)
 
+                    if len(apt_diag_lines) < 200 and apt_diagnostics.is_diagnostic_line(clean_line):
+                        apt_diag_lines.append(clean_line)
+
                     # Check if build was cancelled via API (throttled to once every 3s)
                     now = time.time()
                     if now - last_cancel_check > 3.0:
@@ -164,6 +204,17 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         return_code = process.wait()
         if return_code != 0 and mkosi_bin:
+            dependency_misses = apt_diagnostics.parse_diagnostics(apt_diag_lines)
+            if dependency_misses:
+                log_to_task(build_id, "[ARCH CHECK] apt could not resolve some packages. The pre-flight check only")
+                log_to_task(build_id, f"[ARCH CHECK] verifies top-level names, so a dependency is likely unavailable for {recipe.architecture}:")
+                for m in dependency_misses:
+                    log_to_task(build_id, f"[ARCH CHECK]   - {m['name']}: {m['detail']}")
+                known = {m["name"] for m in (build.missing_packages or [])}
+                build.missing_packages = list(build.missing_packages or []) + [
+                    m for m in dependency_misses if m["name"] not in known
+                ]
+                db.commit()
             log_to_task(build_id, f"[ERROR] mkosi exited with return code {return_code}")
             raise subprocess.CalledProcessError(return_code, cmd)
 
@@ -288,6 +339,8 @@ def build_image_task(self, build_id: str, recipe_id: int):
         build.duration_seconds = duration
 
         recipe.last_build_status = "SUCCESS"
+        if build.missing_packages:
+            log_to_task(build_id, f"[ARCH CHECK] Image built without {len(build.missing_packages)} package(s) unavailable for {recipe.architecture}.")
         db.commit()
 
         log_to_task(build_id, f"Build completed successfully in {duration}s! RAW.XZ Artifact: {raw_xz_filename} ({artifact_size} bytes)", status="SUCCESS")

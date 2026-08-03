@@ -5,13 +5,11 @@ Parses a repository's Packages index into structured metadata for the recipe
 package picker. Kept separate from repo_downloader, which only needs the
 package -> .deb URL mapping used during builds.
 """
-import gzip
-import io
-import lzma
 import threading
 import time
-import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
+
+from core.apt_index import INDEX_ABSENT, fetch_index_text
 
 # (url, suite, component, arch) -> (fetched_at, [package dicts])
 _CACHE: Dict[Tuple[str, str, str, str], Tuple[float, List[Dict[str, Any]]]] = {}
@@ -23,37 +21,14 @@ _CACHE_TTL_SECONDS = 600
 _MAX_PACKAGES = 200_000
 
 
-def _http_get(url: str, timeout: int = 20) -> Optional[bytes]:
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "edge-duro-builder"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except Exception:
-        return None
-
-
 def _fetch_index_text(repo_url: str, suite: str, component: str, arch: str) -> Optional[str]:
     """
-    Fetches the Packages index, trying the compressions Debian archives publish
-    in descending order of ubiquity. Returns None when the repo is unreachable
-    or has no index for this suite/component/arch.
+    Fetches the Packages index. Returns None when the repo is unreachable or has
+    no index for this suite/component/arch -- the picker draws no distinction
+    between the two, it just has nothing to show.
     """
-    base = repo_url.rstrip("/")
-    stem = f"{base}/dists/{suite}/{component}/binary-{arch}/Packages"
-
-    for suffix, decoder in (
-        (".gz", lambda b: gzip.GzipFile(fileobj=io.BytesIO(b)).read()),
-        (".xz", lzma.decompress),
-        ("", lambda b: b),
-    ):
-        raw = _http_get(stem + suffix)
-        if raw is None:
-            continue
-        try:
-            return decoder(raw).decode("utf-8", errors="replace")
-        except Exception:
-            continue
-    return None
+    text = fetch_index_text(repo_url, suite, component, arch, timeout=20)
+    return None if text is INDEX_ABSENT else text
 
 
 def _parse_index(text: str) -> List[Dict[str, Any]]:

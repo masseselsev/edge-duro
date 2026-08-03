@@ -1,5 +1,5 @@
 from conftest import make_recipe
-from core import arch_check
+from core import apt_index, arch_check
 
 
 INDEX = """Package: nginx-full
@@ -138,6 +138,66 @@ def test_absent_index_reports_its_packages_instead_of_disabling_the_check():
     assert "nginx-full" not in names
 
 
+def test_absent_repo_is_reported_so_it_can_be_kept_out_of_the_image():
+    """
+    Репозиторий без binary-arm64 не должен попасть в sources.list.d образа:
+    на устройстве apt update ловил бы 404 вечно.
+    """
+    def fetch(url, _suite, _component, _arch):
+        return arch_check.INDEX_ABSENT if "edge.example" in url else INDEX
+
+    recipe = make_recipe(
+        architecture="arm64",
+        repositories=[
+            {"url": "https://edge.example/repo/bookworm/stable",
+             "suite": "bookworm", "components": "main"},
+            {"url": "https://other.example/repo",
+             "suite": "bookworm", "components": "main"},
+        ],
+    )
+    result = arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=fetch)
+
+    assert result.absent_repos == ["https://edge.example/repo/bookworm/stable"]
+
+
+def test_official_mirror_is_never_listed_as_an_absent_repo():
+    """Зеркало дистрибутива в sources.list.d рецепта не пишется вовсе."""
+    def fetch(url, _suite, component, _arch):
+        return INDEX if component == "main" else arch_check.INDEX_ABSENT
+
+    recipe = make_recipe(architecture="arm64")
+    result = arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=fetch)
+
+    assert result.absent_repos == []
+
+
+def test_a_repo_is_kept_when_any_component_has_an_index():
+    def fetch(_url, _suite, component, _arch):
+        return INDEX if component == "main" else arch_check.INDEX_ABSENT
+
+    recipe = make_recipe(
+        architecture="arm64",
+        repositories=[{"url": "https://edge.example/repo", "suite": "bookworm",
+                       "components": "main contrib"}],
+    )
+    result = arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=fetch)
+
+    assert result.absent_repos == []
+
+
+def test_skipped_check_reports_no_absent_repos():
+    """При отменённой проверке ничего вырезать из образа нельзя."""
+    recipe = make_recipe(
+        architecture="arm64",
+        repositories=[{"url": "https://edge.example/repo", "suite": "bookworm",
+                       "components": "main"}],
+    )
+    result = arch_check.check_recipe_packages(recipe, log=lambda _m: None, fetch=_fetch_nothing)
+
+    assert not result.checked
+    assert result.absent_repos == []
+
+
 def test_all_official_indices_absent_disables_the_check():
     """
     Официальное зеркало без единого индекса значит, что мы спрашиваем не то
@@ -155,12 +215,12 @@ def test_all_official_indices_absent_disables_the_check():
 
 
 def test_fetch_maps_404_to_absent(monkeypatch):
-    monkeypatch.setattr(arch_check, "_http_get", lambda url, timeout=30: (404, None))
+    monkeypatch.setattr(apt_index, "http_get", lambda url, timeout=30: (404, None))
     assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is arch_check.INDEX_ABSENT
 
 
 def test_fetch_maps_network_failure_to_unknown(monkeypatch):
-    monkeypatch.setattr(arch_check, "_http_get", lambda url, timeout=30: (None, None))
+    monkeypatch.setattr(apt_index, "http_get", lambda url, timeout=30: (None, None))
     assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is None
 
 
@@ -168,7 +228,7 @@ def test_fetch_treats_a_mix_of_404_and_network_failure_as_unknown(monkeypatch):
     def flaky(url, timeout=30):
         return (404, None) if url.endswith(".gz") else (None, None)
 
-    monkeypatch.setattr(arch_check, "_http_get", flaky)
+    monkeypatch.setattr(apt_index, "http_get", flaky)
     assert arch_check.fetch_index_text("https://x/repo", "bookworm", "main", "arm64") is None
 
 

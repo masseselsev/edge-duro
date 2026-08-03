@@ -13,14 +13,12 @@ core/apt_diagnostics.py уже по логу mkosi.
 """
 import gzip
 import hashlib
-import io
-import lzma
 import os
 import time
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
+from core.apt_index import INDEX_ABSENT, debian_arch, fetch_index_text
 from core.packages import is_critical, resolve_package_list
 
 DEBIAN_MIRROR = "https://deb.debian.org/debian"
@@ -33,19 +31,6 @@ UBUNTU_COMPONENTS = ("main", "restricted", "universe", "multiverse")
 _CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
-class _IndexAbsent:
-    """
-    Индекс не существует, и это достоверно: сервер ответил 404 на все варианты
-    сжатия. Отличается от None ("не знаю"): 404 на binary-arm64 значит, что под
-    эту архитектуру репозиторий ничего не собирает, и его пакеты надо назвать
-    отсутствующими, а не отменять проверку целиком.
-    """
-
-    def __repr__(self):
-        return "INDEX_ABSENT"
-
-
-INDEX_ABSENT = _IndexAbsent()
 
 
 @dataclass
@@ -53,15 +38,14 @@ class ArchCheckResult:
     checked: bool = False
     missing: List[Dict[str, str]] = field(default_factory=list)
     unreachable: List[str] = field(default_factory=list)
+    # URL репозиториев рецепта, не публикующих ни одного индекса под эту
+    # архитектуру. Такой источник незачем писать в sources.list.d образа --
+    # на устройстве apt update ловил бы на нём 404 бесконечно.
+    absent_repos: List[str] = field(default_factory=list)
 
 
 def has_critical(result: "ArchCheckResult") -> bool:
     return any(m["reason"] == "critical" for m in result.missing)
-
-
-def debian_arch(architecture) -> str:
-    arch = (architecture or "amd64").lower()
-    return "arm64" if arch in ("arm64", "aarch64") else "amd64"
 
 
 def official_index_sources(distribution, release, architecture) -> List[Tuple[str, str, str]]:
@@ -134,54 +118,6 @@ def _write_cache(path: Optional[str], names: Set[str]) -> None:
         os.replace(tmp, path)
     except Exception:
         pass
-
-
-def _http_get(url: str, timeout: int = 30) -> Tuple[Optional[int], Optional[bytes]]:
-    """
-    Возвращает (http_status, body). status равен None, когда HTTP-ответа не было
-    вовсе -- DNS, TCP, TLS, таймаут. Код нужен, чтобы отличить "такого индекса
-    нет" (404) от "не дозвонились".
-    """
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "edge-duro-builder"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, resp.read()
-    except urllib.error.HTTPError as e:
-        return e.code, None
-    except Exception:
-        return None, None
-
-
-def fetch_index_text(url: str, suite: str, component: str, arch: str):
-    """
-    Тянет Packages в тех сжатиях, что публикуют архивы Debian и Ubuntu.
-
-    Возвращает текст индекса, INDEX_ABSENT (все варианты ответили 404) либо
-    None (хоть один вариант не ответил или отдал нечитаемое -- достоверного
-    вывода сделать нельзя).
-    """
-    stem = f"{url.rstrip('/')}/dists/{suite}/{component}/binary-{arch}/Packages"
-    only_missing = True
-
-    for suffix, decoder in (
-        (".gz", lambda b: gzip.GzipFile(fileobj=io.BytesIO(b)).read()),
-        (".xz", lzma.decompress),
-        ("", lambda b: b),
-    ):
-        status, raw = _http_get(stem + suffix)
-        if raw is None:
-            if status != 404:
-                only_missing = False
-            continue
-        try:
-            return decoder(raw).decode("utf-8", errors="replace")
-        except Exception:
-            # Ответ есть, но распаковать не вышло -- сервер ведёт себя
-            # неожиданно, "индекса нет" отсюда не следует.
-            only_missing = False
-            continue
-
-    return INDEX_ABSENT if only_missing else None
 
 
 def _available_names(
@@ -261,6 +197,15 @@ def check_recipe_packages(recipe, log=print, fetch=None) -> ArchCheckResult:
     for source in absent:
         log(f"[ARCH CHECK] {describe(source)} publishes no index -- its packages count as unavailable for {arch}.")
 
+    # Репозиторий рецепта считается непригодным, только когда ни один его
+    # компонент не публикует индекс: contrib может отсутствовать при живом main.
+    official_urls = {url for url, _, _ in official}
+    with_index = {source[0] for source in sources if source not in absent}
+    absent_repos = [
+        url for url in dict.fromkeys(source[0] for source in absent)
+        if url not in official_urls and url not in with_index
+    ]
+
     std_pkgs, edge_pkgs = resolve_package_list(recipe)
     missing: List[Dict[str, str]] = []
 
@@ -274,4 +219,5 @@ def check_recipe_packages(recipe, log=print, fetch=None) -> ArchCheckResult:
             "detail": "",
         })
 
-    return ArchCheckResult(checked=True, missing=missing, unreachable=[])
+    return ArchCheckResult(checked=True, missing=missing, unreachable=[],
+                           absent_repos=absent_repos)

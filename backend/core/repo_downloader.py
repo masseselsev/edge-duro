@@ -1,44 +1,26 @@
 import os
 import urllib.request
-import gzip
-import io
-import re
 from typing import List, Dict, Set
+
+from core.apt_index import INDEX_ABSENT, debian_arch, fetch_index_text
 
 
 def fetch_and_parse_packages_index(repo_url: str, suite: str, component: str = "main", arch: str = "amd64") -> Dict[str, str]:
     """
-    Fetches Packages.gz for a given repository, suite, component, and architecture,
-    and returns a mapping of package_name -> deb_url.
+    Fetches the Packages index for a given repository, suite, component, and
+    architecture, and returns a mapping of package_name -> deb_url.
     """
     base_repo_url = repo_url.rstrip("/")
-    debian_arch = "arm64" if arch in ["arm64", "aarch64"] else "amd64"
-    # Build URL to Packages.gz
-    # Example: https://edge.vitcompany.com/repo/bookworm/stable/dists/bookworm/main/binary-arm64/Packages.gz
-    packages_gz_url = f"{base_repo_url}/dists/{suite}/{component}/binary-{debian_arch}/Packages.gz"
-    packages_url = f"{base_repo_url}/dists/{suite}/{component}/binary-{debian_arch}/Packages"
+    content_str = fetch_index_text(base_repo_url, suite, component, debian_arch(arch), timeout=15)
+
+    if content_str is INDEX_ABSENT:
+        print(f"[REPO FETCH] {base_repo_url} {suite}/{component} publishes no index for {debian_arch(arch)}.")
+        return {}
+    if not content_str:
+        print(f"[REPO FETCH] Could not read the {suite}/{component} index from {base_repo_url}.")
+        return {}
 
     package_deb_map = {}
-    content_str = ""
-
-    try:
-        req = urllib.request.Request(packages_gz_url, headers={"User-Agent": "edge-duro-builder"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            compressed_data = resp.read()
-            with gzip.GzipFile(fileobj=io.BytesIO(compressed_data)) as gz:
-                content_str = gz.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        print(f"[REPO FETCH] Failed to fetch Packages.gz from {packages_gz_url}: {e}. Trying uncompressed Packages...")
-        try:
-            req = urllib.request.Request(packages_url, headers={"User-Agent": "edge-duro-builder"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                content_str = resp.read().decode("utf-8", errors="replace")
-        except Exception as e2:
-            print(f"[REPO FETCH] Failed to fetch Packages from {packages_url}: {e2}")
-            return package_deb_map
-
-    if not content_str:
-        return package_deb_map
 
     # Parse Debian control blocks
     blocks = content_str.split("\n\n")
@@ -83,6 +65,13 @@ def download_edge_packages(recipe, workspace_path: str, exclude=frozenset()) -> 
     from core.packages import resolve_package_list
     _, edge_pkgs = resolve_package_list(recipe, exclude=exclude)
     requested_pkgs: Set[str] = set(edge_pkgs)
+
+    if not requested_pkgs:
+        # Every Edge package was excluded (typically an arm64 recipe built
+        # before the platform packages exist). Reading the indices would only
+        # produce a handful of pointless requests and 404 warnings.
+        print("[REPO DOWNLOADER] No Edge packages to fetch.")
+        return []
 
     print(f"[REPO DOWNLOADER] Resolving Edge packages: {sorted(list(requested_pkgs))}...")
 

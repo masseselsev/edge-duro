@@ -1,6 +1,12 @@
 import os
 from models import Recipe
-from core.packages import resolve_package_list
+from core.packages import (
+    ARMBIAN_REPO_URL,
+    armbian_source_line,
+    base_distribution,
+    is_armbian,
+    resolve_package_list,
+)
 
 
 def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset(),
@@ -21,7 +27,9 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
     std_pkgs, _ = resolve_package_list(recipe, exclude=exclude)
     packages_formatted = "\n    ".join(std_pkgs)
 
-    distro = (recipe.distribution or "debian").lower()
+    # Armbian -- слой поверх Debian или Ubuntu, самому mkosi такое имя ничего не
+    # говорит, поэтому вниз уходит базовый дистрибутив.
+    distro = base_distribution(recipe.distribution, recipe.release)
 
     arch_map = {
         "amd64": "x86-64",
@@ -82,6 +90,12 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
     sources_lines = []
     rel = recipe.release or "bookworm"
 
+    # Ядро, DTB и U-Boot под RK3588 приезжают отсюда: в самих Debian и Ubuntu
+    # поддержки этих плат нет. Репозиторий добавляется сам, а не руками в UI,
+    # иначе выбор платы собирал бы образ без ядра для неё.
+    if is_armbian(recipe.distribution) and ARMBIAN_REPO_URL not in skip_repo_urls:
+        sources_lines.append(armbian_source_line(rel))
+
     # Custom APT repositories configured in Recipe UI
     if recipe.repositories and isinstance(recipe.repositories, list):
         for repo in recipe.repositories:
@@ -126,6 +140,13 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
         except Exception:
             pass
 
+    # RK3588 стартует не через UEFI: boot ROM читает загрузчик по фиксированным
+    # смещениям на носителе, EFI-раздела в этой цепочке нет вовсе. systemd-boot
+    # тут не просто лишний -- с Bootable=yes mkosi собирал бы загрузочную схему,
+    # которой плата никогда не воспользуется. Загрузку обеспечивают U-Boot в SPI
+    # и extlinux от Armbian.
+    rk3588 = is_armbian(recipe.distribution)
+
     config_lines = [
         "[Distribution]",
         f"Distribution={mkosi_distro}",
@@ -146,11 +167,16 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
         "OutputDirectory=output",
         "",
         "[Content]",
-        "Bootloader=systemd-boot",
-        "Bootable=yes",
-        "WithRecommends=no",
-        f"Packages=\n    {packages_formatted}",
     ]
+
+    if rk3588:
+        config_lines.append("Bootable=no")
+    else:
+        config_lines.append("Bootloader=systemd-boot")
+        config_lines.append("Bootable=yes")
+
+    config_lines.append("WithRecommends=no")
+    config_lines.append(f"Packages=\n    {packages_formatted}")
 
     if remove_files:
         remove_files_formatted = "\n    ".join(remove_files)

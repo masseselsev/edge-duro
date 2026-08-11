@@ -4,6 +4,9 @@ import shlex
 import shutil
 from typing import List
 from models import Recipe, RecipeAsset
+from core.netnames import DEFAULT_START_INDEX, rename_script
+from core.packages import ARMBIAN_REPO_URL, armbian_source_line, board_dtb, is_armbian
+from core.rk3588 import provision_script
 
 
 def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
@@ -59,6 +62,23 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
         {"mountpoint": "/var/log/edge", "size": "1G", "filesystem": "ext4", "type": "generic", "label": "edgelog"},
         {"mountpoint": "/var/opt/edge", "size": "max", "filesystem": "ext4", "type": "generic", "label": "edgestor"},
     ]
+
+    # BootROM RK3588 читает загрузчик по фиксированным смещениям в начале
+    # носителя: idbloader.img с сектора 64, u-boot.itb с сектора 16384. Раздел
+    # по умолчанию начинается с сектора 2048, то есть u-boot.itb лёг бы поверх
+    # файловой системы -- образ собирается, но плата с него не стартует.
+    # Пустой неформатируемый раздел на 16 МБ занимает секторы 2048..34815 и
+    # накрывает собой оба смещения; idbloader попадает в штатный зазор GPT до
+    # 2048. Та же раскладка у собственных образов Armbian.
+    if recipe and is_armbian(recipe.distribution):
+        with open(os.path.join(repart_dir, "00-rk3588-loader.conf"), "w") as f:
+            f.write(
+                "[Partition]\n"
+                "Type=linux-generic\n"
+                "Label=rkloader\n"
+                "SizeMinBytes=16M\n"
+                "SizeMaxBytes=16M\n"
+            )
 
     for idx, p in enumerate(partitions, start=1):
         p_type = (p.get("type") or "generic").lower()
@@ -232,6 +252,76 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
                 suite = repo.get("suite") or rel
                 comp = repo.get("components") or "main"
                 repo_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
+
+    # Ядро, DTB и U-Boot платы живут только в репозитории Armbian, и apt должен
+    # видеть его ещё во время сборки. Для этого годится только mkosi.sandbox:
+    # mkosi запускает пакетный менеджер СНАРУЖИ образа, поэтому его конфигурация
+    # из mkosi.skeleton (которая уезжает в /buildroot) на установку не влияет --
+    # ровно этим и объяснялось "Unable to locate package linux-image-vendor-rk35xx"
+    # при том, что предполётная проверка те же пакеты в индексе находила.
+    # Каталог mkosi.sandbox/ подхватывается автоматически, без строки в конфиге.
+    # postinst ядра Armbian сразу дёргает update-initramfs, и делает это под
+    # `set -e`: падение хука роняет весь пакет и всю сборку. А mkinitramfs
+    # читает /etc/initramfs-tools/initramfs.conf, который лежит в conffile'ах
+    # initramfs-tools-core -- dpkg кладёт conffile'ы не при распаковке, а при
+    # конфигурации пакета. С флагами mkosi (--force-depends,
+    # APT::Immediate-Configure=off) initramfs-tools успевает сконфигурироваться
+    # раньше собственной зависимости initramfs-tools-core, ядро идёт следом --
+    # и получает "cannot open /etc/initramfs-tools/initramfs.conf".
+    # Файл из mkosi.skeleton попадает в /buildroot ДО установки пакетов, поэтому
+    # хук отрабатывает при любом порядке конфигурации. Содержимое -- штатные
+    # значения самого initramfs-tools-core, так что образ получает ровно то, что
+    # положил бы пакет. Свой initramfs edge-duro всё равно пересобирает позже в
+    # postinst.
+    if is_armbian(recipe.distribution):
+        initramfs_dir = os.path.join(workspace_path, "mkosi.skeleton", "etc", "initramfs-tools")
+        os.makedirs(os.path.join(initramfs_dir, "conf.d"), exist_ok=True)
+        with open(os.path.join(initramfs_dir, "initramfs.conf"), "w") as f:
+            f.write(
+                "MODULES=most\n"
+                "BUSYBOX=auto\n"
+                "COMPRESS=zstd\n"
+                "DEVICE=\n"
+                "NFSROOT=auto\n"
+                "RUNSIZE=10%\n"
+                "FSTYPE=auto\n"
+            )
+
+    sandbox_sources = os.path.join(
+        workspace_path, "mkosi.sandbox", "etc", "apt", "sources.list.d"
+    )
+    sandbox_armbian = os.path.join(sandbox_sources, "armbian.list")
+    if is_armbian(recipe.distribution) and ARMBIAN_REPO_URL not in skip_repo_urls:
+        os.makedirs(sandbox_sources, exist_ok=True)
+        with open(sandbox_armbian, "w") as f:
+            f.write(armbian_source_line(rel) + "\n")
+        # В сам образ репозиторий тоже нужен: иначе apt update на плате его не
+        # знает и обновления ядра приходить перестанут.
+        repo_lines.insert(0, armbian_source_line(rel))
+
+        # initramfs.conf выше подложен до установки пакетов, поэтому dpkg видит
+        # "существующий, но никем не заявленный" conffile и по умолчанию
+        # спрашивает, чью версию оставить. Stdin в сборке нет -- вопрос сразу
+        # валит пакет: "end of file on stdin at conffile prompt". Эти два флага
+        # отвечают за нас, не заводя интерактива. Файл кладётся в mkosi.sandbox:
+        # пакетный менеджер mkosi запускает снаружи образа, свой dpkg.cfg.d он
+        # читает оттуда же.
+        sandbox_dpkg = os.path.join(workspace_path, "mkosi.sandbox", "etc", "dpkg", "dpkg.cfg.d")
+        os.makedirs(sandbox_dpkg, exist_ok=True)
+        with open(os.path.join(sandbox_dpkg, "edge-noninteractive"), "w") as f:
+            f.write("force-confdef\nforce-confold\n")
+    else:
+        # Воркспейс переиспользуется: рецепт, уведённый с Armbian, иначе
+        # продолжил бы собираться с чужим репозиторием и чужими флагами dpkg.
+        for stale in (
+            sandbox_armbian,
+            os.path.join(workspace_path, "mkosi.sandbox", "etc", "dpkg",
+                         "dpkg.cfg.d", "edge-noninteractive"),
+            os.path.join(workspace_path, "mkosi.skeleton", "etc",
+                         "initramfs-tools", "initramfs.conf"),
+        ):
+            if os.path.exists(stale):
+                os.remove(stale)
 
     for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
         sources_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "sources.list.d")
@@ -470,6 +560,32 @@ fi
         _loader_opts.append(_kp)
     loader_options = " ".join(_loader_opts)
 
+    # U-Boot на RK3588 не понимает записи systemd-boot: он ищет boot.scr или
+    # extlinux/extlinux.conf. Без этого файла загрузчик стартует, но грузить
+    # ему нечего -- образ выглядит собранным и молча не поднимается на плате.
+    # FDT обязателен: без device tree ядро RK3588 не найдёт ни память, ни
+    # периферию. Если DTB платы почему-то не приехал, FDTDIR даёт U-Boot
+    # выбрать его самому по своему fdtfile -- лучше, чем ссылка в никуда.
+    extlinux_block = ""
+    if is_armbian(recipe.distribution):
+        dtb_rel = board_dtb(getattr(recipe, "board", None))
+        extlinux_block = f"""
+    mkdir -p /boot/extlinux
+    {{
+      echo "LABEL Edge OS"
+      echo "  LINUX $KIMG"
+      echo "  INITRD $IIMG"
+      if [ -n "{dtb_rel}" ] && [ -f "/boot/dtb-$KVER/{dtb_rel}" ]; then
+        echo "  FDT /dtb-$KVER/{dtb_rel}"
+      else
+        echo "  FDTDIR /dtb-$KVER/"
+      fi
+      echo "  APPEND {loader_options}"
+    }} > /boot/extlinux/extlinux.conf
+    echo "[POSTINST] extlinux.conf для U-Boot:"
+    cat /boot/extlinux/extlinux.conf
+"""
+
     postinst_script = f"""#!/bin/bash
 set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
@@ -661,6 +777,7 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
       echo "[POSTINST] WARNING: no kernel/initrd in /boot (KVER=$KVER); relying on UKI in EFI/Linux"
     fi
 
+{extlinux_block}
     echo "[POSTINST] ESP staging /boot contents:"
     ls -la /boot 2>/dev/null || true
     echo "[POSTINST] ESP staging /boot/EFI/BOOT contents:"
@@ -701,8 +818,25 @@ fi
     if recipe.hostname_from_netif:
         firstboot_lines.append(hostname_mac_script)
 
+    # Переименование идёт до всего остального: дальше по скрипту интерфейсы уже
+    # должны называться так, как записано в рецепте.
+    net_prefix = (recipe.network_config or {}).get("prefix") if isinstance(recipe.network_config, dict) else None
+    if net_prefix:
+        start_index = (recipe.network_config or {}).get("start_index", DEFAULT_START_INDEX)
+        try:
+            start_index = int(start_index)
+        except (TypeError, ValueError):
+            start_index = DEFAULT_START_INDEX
+        firstboot_lines.append(rename_script(str(net_prefix), start_index))
+
     if recipe.raw_firstboot and recipe.raw_firstboot.strip():
         firstboot_lines.append(recipe.raw_firstboot.strip())
+
+    # Клонирование на NVMe идёт последним: до него скрипт успевает задать
+    # hostname и всё, что рецепт дописал сам, и на диск уезжает уже
+    # настроенная система.
+    if is_armbian(recipe.distribution):
+        firstboot_lines.append(provision_script())
 
     if len(firstboot_lines) > 2:
         fb_bin_dir = os.path.join(extra_dir, "opt", "edge", "bin")

@@ -11,9 +11,14 @@ import types
 from conftest import make_recipe
 
 # mkosi_config импортирует models ради аннотации типа; в тестах БД не нужна.
+# Заглушка обязана нести все имена, которые импортируют соседние модули: она
+# попадает в sys.modules на весь прогон, и неполный набор ронял бы любой тест,
+# импортирующий core/workspace.py или tasks/, в зависимости от порядка запуска.
 if "models" not in sys.modules:
     stub = types.ModuleType("models")
     stub.Recipe = object
+    stub.RecipeAsset = object
+    stub.Build = object
     sys.modules["models"] = stub
 
 from core.mkosi_config import generate_mkosi_conf  # noqa: E402

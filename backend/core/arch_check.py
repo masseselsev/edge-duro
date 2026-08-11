@@ -19,7 +19,13 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from core.apt_index import INDEX_ABSENT, debian_arch, fetch_index_text
-from core.packages import is_critical, resolve_package_list
+from core.packages import (
+    ARMBIAN_REPO_URL,
+    base_distribution,
+    is_armbian,
+    is_critical,
+    resolve_package_list,
+)
 
 DEBIAN_MIRROR = "https://deb.debian.org/debian"
 DEBIAN_COMPONENTS = ("main", "contrib", "non-free", "non-free-firmware")
@@ -54,7 +60,10 @@ def official_index_sources(distribution, release, architecture) -> List[Tuple[st
     сгенерированном конфиге не задаётся. Ubuntu держит не-x86 архитектуры на
     отдельном хосте ports.ubuntu.com, на archive.ubuntu.com их индексов нет.
     """
-    distro = (distribution or "debian").lower()
+    # Armbian -- слой поверх Debian или Ubuntu; официальные индексы надо брать
+    # у базового дистрибутива, иначе проверка уходит на deb.debian.org за
+    # суитом noble, которого там нет, и молча отключается целиком.
+    distro = base_distribution(distribution, release)
     suite = release or "bookworm"
     if "ubuntu" in distro:
         mirror = UBUNTU_PORTS_MIRROR if debian_arch(architecture) == "arm64" else UBUNTU_MIRROR
@@ -164,6 +173,13 @@ def check_recipe_packages(recipe, log=print, fetch=None) -> ArchCheckResult:
 
     official = list(official_index_sources(recipe.distribution, recipe.release, recipe.architecture))
     sources = list(official)
+
+    # Репозиторий Armbian добавляется в образ автоматически (mkosi_config.py),
+    # в recipe.repositories его нет. Без него ядро, DTB и U-Boot платы
+    # выглядели бы отсутствующими, и проверка вычеркнула бы их из сборки.
+    if is_armbian(recipe.distribution):
+        sources.append((ARMBIAN_REPO_URL, recipe.release or "noble", "main"))
+
     for repo in (recipe.repositories or []):
         if isinstance(repo, dict) and repo.get("url"):
             suite = repo.get("suite") or recipe.release or "bookworm"

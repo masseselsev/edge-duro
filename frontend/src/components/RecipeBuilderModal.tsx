@@ -73,6 +73,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [distribution, setDistribution] = useState(recipe?.distribution || 'debian');
   const [release, setRelease] = useState(recipe?.release || 'bookworm');
   const [architecture, setArchitecture] = useState(recipe?.architecture || 'amd64');
+  const [board, setBoard] = useState(recipe?.board || 'generic');
   const [ignoreMissingArch, setIgnoreMissingArch] = useState(recipe?.ignore_missing_arch_packages || false);
   const [outputFormats, setOutputFormats] = useState<string[]>(recipe?.output_formats || ['raw_xz']);
   const [packages, setPackages] = useState<string[]>(recipe?.packages || []);
@@ -102,6 +103,10 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
     ? existingDns.join(' ')
     : '77.88.8.8 1.1.1.1 9.9.9.9 8.8.8.8';
   const [dnsServers, setDnsServers] = useState<string>(initialDnsStr);
+  const [ifacePrefix, setIfacePrefix] = useState<string>(recipe?.network_config?.prefix || '');
+  const [ifaceStartIndex, setIfaceStartIndex] = useState<number>(
+    recipe?.network_config?.start_index ?? 0
+  );
 
   const [assets, setAssets] = useState<any[]>(recipe?.assets || []);
   const [saving, setSaving] = useState(false);
@@ -140,7 +145,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       distribution,
       release,
       architecture,
-      output_formats: outputFormats,
+      board,
+      output_formats: distribution === 'armbian' ? outputFormats.filter((f) => f !== 'iso') : outputFormats,
       packages,
       repositories,
       partitions,
@@ -162,6 +168,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       network_config: {
         ...existingNetCfg,
         interfaces: updatedIfaces,
+        prefix: ifacePrefix.trim() || null,
+        start_index: ifaceStartIndex,
       },
     };
 
@@ -310,11 +318,13 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             distribution={distribution}
             release={release}
             architecture={architecture}
+            board={board}
             ignoreMissingArch={ignoreMissingArch}
-            onChange={(d, r, a) => {
+            onChange={(d, r, a, b) => {
               setDistribution(d);
               setRelease(r);
               setArchitecture(a);
+              setBoard(b);
             }}
             onIgnoreMissingArchChange={setIgnoreMissingArch}
           />
@@ -327,7 +337,10 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             <div className="flex gap-3">
               {[
                 { id: 'raw_xz', label: '.raw.xz (Native Disk Image)' },
-                { id: 'iso', label: '.iso (Bootable Installer ISO)' }
+                // RK3588 (и любая Armbian-плата) грузится через U-Boot в SPI,
+                // не через UEFI -- у образа нет ESP, поэтому ISO для неё не
+                // строится в принципе (см. build_image.py).
+                ...(distribution === 'armbian' ? [] : [{ id: 'iso', label: '.iso (Bootable Installer ISO)' }]),
               ].map((fmt) => (
                 <button
                   key={fmt.id}
@@ -469,6 +482,39 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
             />
             <p className="text-[11px] text-zinc-500">{t('dnsServersHint')}</p>
+          </div>
+
+          {/* Interface naming: prefix + where numbering starts */}
+          <div className="space-y-1.5">
+            <FieldLabel hint={t('ifacePrefixHintTip')}>
+              {t('ifacePrefix')}
+            </FieldLabel>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={ifacePrefix}
+                onChange={(e) => setIfacePrefix(e.target.value)}
+                placeholder="edge"
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+              />
+              <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+                {[0, 1].map((start) => (
+                  <button
+                    key={start}
+                    type="button"
+                    onClick={() => setIfaceStartIndex(start)}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      ifaceStartIndex === start
+                        ? 'bg-amber-500 text-zinc-950 shadow-md'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {`${ifacePrefix.trim() || 'edge'}${start}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] text-zinc-500">{t('ifacePrefixHint')}</p>
           </div>
 
           {/* Credentials: root password + additional login accounts */}

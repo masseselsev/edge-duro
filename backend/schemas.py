@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
+
+from core.packages import architecture_for_distribution
 
 
 class UTCModel(BaseModel):
@@ -149,6 +151,7 @@ class RecipeBase(BaseModel):
     distribution: str = Field(default="debian")
     release: str = Field(default="bookworm")
     architecture: str = Field(default="amd64")
+    board: str = Field(default="generic")
     output_formats: List[str] = Field(default_factory=lambda: ["raw_xz"])
     packages: List[str] = Field(default_factory=list)
     repositories: List[AptRepositorySchema] = Field(default_factory=list)
@@ -179,6 +182,17 @@ class RecipeBase(BaseModel):
     @classmethod
     def validate_root_password(cls, v: Optional[str]) -> Optional[str]:
         return _validate_password_value(v)
+
+    @model_validator(mode='after')
+    def derive_architecture(self):
+        """
+        Архитектуру не выбирают отдельно: Armbian существует только под
+        arm64-платы, Debian и Ubuntu мы собираем только под amd64. Присланное
+        клиентом значение игнорируется, иначе рецепт мог бы сохраниться с
+        несовместимой парой.
+        """
+        object.__setattr__(self, 'architecture', architecture_for_distribution(self.distribution))
+        return self
 
 
 class RecipeCreate(RecipeBase):

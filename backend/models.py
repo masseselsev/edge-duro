@@ -47,6 +47,10 @@ class Recipe(Base):
     distribution = Column(String, nullable=False, default="debian") # debian, ubuntu
     release = Column(String, nullable=False, default="bookworm")    # bookworm, trixie, jammy, noble
     architecture = Column(String, nullable=False, default="amd64")   # amd64, arm64
+    # Плата, под которую собирается arm64-образ. RK3588 грузится не через UEFI,
+    # а по фиксированным смещениям на носителе, поэтому его образ финализируется
+    # иначе, чем generic-arm64.
+    board = Column(String, nullable=False, default="generic")        # generic, opi5-plus
 
     output_formats = Column(JSON, nullable=False, default=lambda: ["raw_xz"]) # raw_xz, iso
     packages = Column(JSON, nullable=False, default=list) # ["nginx", "curl"]

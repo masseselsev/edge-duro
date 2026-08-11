@@ -26,6 +26,7 @@ def make_recipe(**overrides):
         distribution="debian",
         release="bookworm",
         architecture="amd64",
+        board="generic",
         packages=[],
         repositories=[],
         ignore_missing_arch_packages=False,

@@ -8,6 +8,7 @@ from models import Build, Recipe, RecipeAsset
 from celery_app import celery_app
 from core.workspace import prepare_workspace, populate_extra_tree
 from core.mkosi_config import generate_mkosi_conf
+from core.packages import is_armbian
 
 
 @celery_app.task(name="tasks.build_image.build_image_task", bind=True)
@@ -258,6 +259,17 @@ def build_image_task(self, build_id: str, recipe_id: int):
             disk_files.sort(key=lambda f: os.path.getsize(f), reverse=True)
             target_raw_file = disk_files[0]
 
+        # Загрузчик пишется до сжатия: BootROM RK3588 читает его с фиксированных
+        # смещений в начале носителя, и без этого шага .raw.xz разворачивается в
+        # незагружаемую карту -- а значит и firstboot, прошивающий SPI, никогда
+        # не стартует.
+        if is_armbian(recipe.distribution) and target_raw_file and target_raw_file.endswith(".raw"):
+            from core.rk3588 import write_bootloader_into_image
+            if not write_bootloader_into_image(target_raw_file, lambda m: log_to_task(build_id, m)):
+                raise RuntimeError(
+                    "Не удалось записать загрузчик RK3588 в образ -- плата с него не загрузится."
+                )
+
         # Extract edge-base version for unified RAW.XZ naming scheme
         edge_base_ver = None
         try:
@@ -365,9 +377,18 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         # Check if ISO output format was requested
         if "iso" in (recipe.output_formats or []):
-            log_to_task(build_id, "Triggering ISO artifact generation task...")
-            from tasks.generate_iso import generate_iso_task
-            generate_iso_task.delay(build_id, ws_path, recipe.id)
+            # RK3588 (и любая Armbian-плата) не грузится через UEFI вообще: у
+            # образа нет ESP (Bootable=no), а generate_iso.py при её отсутствии
+            # не падает -- он умеет вытащить vmlinuz/initrd прямо из корневого
+            # раздела через debugfs и всё равно собрать ISO. Получился бы
+            # ISO, который "успешно собрался", но не грузится ни на одном
+            # RK3588: grub-mkrescue целится в x86_64-efi/BIOS, которых там нет.
+            if is_armbian(recipe.distribution):
+                log_to_task(build_id, "[ISO] Пропуск: Armbian/RK3588 грузится через U-Boot в SPI, а не через UEFI -- ISO для этой платы не имеет смысла.")
+            else:
+                log_to_task(build_id, "Triggering ISO artifact generation task...")
+                from tasks.generate_iso import generate_iso_task
+                generate_iso_task.delay(build_id, ws_path, recipe.id)
 
     except Exception as e:
         duration = int(time.time() - start_time)

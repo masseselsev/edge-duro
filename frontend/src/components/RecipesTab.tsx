@@ -164,46 +164,45 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                 }`}
               >
                 <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
-                          {recipe.name}
-                        </h3>
-                        {recipe.is_dev && (
-                          <span
-                            title={t('devBuildHint') || 'Marks this recipe as a dev build. Artifacts are named edge-dev_… so dev images cannot be confused with release ones.'}
-                            className="flex items-center gap-1 text-[9px] font-mono font-bold text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-0.5 rounded-full"
-                          >
-                            <FlaskConical size={10} />
-                            <span>{t('devBadge') || 'DEV'}</span>
-                          </span>
-                        )}
-                        {activeBuild && (
-                          <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
-                            <Circle size={6} className="fill-amber-400 animate-ping" />
-                            <span>{activeBuild.status}</span>
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">
-                        {recipe.description || t('noDescription')}
-                      </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 title={recipe.name} className="text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors truncate min-w-0">
+                      {recipe.name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {recipe.is_dev && (
+                        <span
+                          title={t('devBuildHint') || 'Marks this recipe as a dev build. Artifacts are named edge-dev_… so dev images cannot be confused with release ones.'}
+                          className="flex items-center gap-1 text-[9px] font-mono font-bold text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-0.5 rounded-full"
+                        >
+                          <FlaskConical size={10} />
+                          <span>{t('devBadge') || 'DEV'}</span>
+                        </span>
+                      )}
+                      {activeBuild && (
+                        <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                          <Circle size={6} className="fill-amber-400 animate-ping" />
+                          <span>{activeBuild.status}</span>
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">
-                      {recipe.distribution} {recipe.release}
-                    </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-zinc-400 pt-1">
-                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded border border-zinc-800">
+                  <p className="text-xs text-zinc-400 line-clamp-2 min-h-[2rem]">
+                    {recipe.description || t('noDescription')}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono pt-1">
+                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-lg font-bold">
+                      {recipe.distribution} {recipe.release}
+                    </span>
+                    <span className="flex items-center gap-1 bg-zinc-950 text-zinc-400 px-2.5 py-1 rounded-lg border border-zinc-800">
                       <Cpu size={12} className="text-zinc-500" />
                       {recipe.architecture}
                     </span>
-                    <span className="bg-zinc-950 px-2 py-1 rounded border border-zinc-800">
+                    <span className="bg-zinc-950 text-zinc-400 px-2.5 py-1 rounded-lg border border-zinc-800">
                       {(recipe.output_formats || []).join(', ')}
                     </span>
-                    <span className="bg-zinc-950 px-2 py-1 rounded border border-zinc-800">
+                    <span className="bg-zinc-950 text-zinc-400 px-2.5 py-1 rounded-lg border border-zinc-800">
                       {(recipe.packages || []).length} pkgs
                     </span>
                   </div>

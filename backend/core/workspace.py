@@ -4,9 +4,9 @@ import shlex
 import shutil
 from typing import List
 from models import Recipe, RecipeAsset
-from core.netnames import DEFAULT_START_INDEX, rename_script
-from core.packages import ARMBIAN_REPO_URL, armbian_source_line, board_dtb, is_armbian
-from core.rk3588 import provision_script
+from core.netnames import DEFAULT_START_INDEX, STAMP_PATH as NETNAMES_STAMP, rename_script
+from core.packages import ARMBIAN_REPO_URL, armbian_source_line, board_console, board_dtb, is_armbian
+from core.rk3588 import MARKER_PATH as PROVISION_MARKER, provision_script
 
 
 def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
@@ -58,7 +58,7 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
 
     partitions = (recipe.partitions if (recipe and recipe.partitions) else None) or [
         {"mountpoint": "/boot", "size": "512M", "filesystem": "vfat", "type": "esp", "label": "edgeboot"},
-        {"mountpoint": "/", "size": "8G", "filesystem": "ext4", "type": "root", "label": "edgeroot"},
+        {"mountpoint": "/", "size": "2G", "filesystem": "ext4", "type": "root", "label": "edgeroot"},
         {"mountpoint": "/var/log/edge", "size": "1G", "filesystem": "ext4", "type": "generic", "label": "edgelog"},
         {"mountpoint": "/var/opt/edge", "size": "max", "filesystem": "ext4", "type": "generic", "label": "edgestor"},
     ]
@@ -99,6 +99,12 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
             lines.append("Type=root")
             lines.append(f"Format={p_fs}")
             lines.append("CopyFiles=/")
+            # Размер root задаётся потолком, а не полом: repart ужимает раздел
+            # под фактически скопированное. Пол в 8G раздувал распакованный .raw
+            # до ~10 ГБ независимо от того, что реально попало в образ, и ровно
+            # столько же потом ехало по dd на NVMe. Тот же Minimize=guess стоит
+            # в дефолтной разметке самого mkosi.
+            lines.append("Minimize=guess")
         elif p_type == "swap":
             lines.append("Type=swap")
             lines.append("Format=swap")
@@ -115,7 +121,11 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
             size_val = p_size.upper()
             if not size_val.endswith("M") and not size_val.endswith("G") and not size_val.endswith("B"):
                 size_val += "M"
-            lines.append(f"SizeMinBytes={size_val}")
+            # Для root размер -- потолок (см. Minimize=guess выше): если
+            # содержимое в него не влезет, сборка упадёт, а не молча обрежет
+            # rootfs. Для остальных разделов это по-прежнему гарантированный
+            # минимум, которым управляет сам рецепт.
+            lines.append(f"SizeMaxBytes={size_val}" if p_type == "root" else f"SizeMinBytes={size_val}")
 
         with open(conf_path, "w") as f:
             f.write("\n".join(lines) + "\n")
@@ -555,7 +565,7 @@ fi
     if "fsck.mode" not in _kp:
         _loader_opts.append("fsck.mode=skip")
     if "console=" not in _kp:
-        _loader_opts += ["console=tty0", "console=ttyS0,115200"]
+        _loader_opts += ["console=tty0", f"console={board_console(getattr(recipe, 'board', None))}"]
     if _kp:
         _loader_opts.append(_kp)
     loader_options = " ".join(_loader_opts)
@@ -582,7 +592,7 @@ fi
       fi
       echo "  APPEND {loader_options}"
     }} > /boot/extlinux/extlinux.conf
-    echo "[POSTINST] extlinux.conf для U-Boot:"
+    echo "[POSTINST] extlinux.conf for U-Boot:"
     cat /boot/extlinux/extlinux.conf
 """
 
@@ -806,11 +816,14 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
   umount -l "$ROOT/dev" 2>/dev/null || true
 fi
 """
-    for hk in ["mkosi.postinst", "mkosi.finalize"]:
-        postinst_path = os.path.join(workspace_path, hk)
-        with open(postinst_path, "w") as f:
-            f.write(postinst_script)
-        os.chmod(postinst_path, 0o755)
+    # mkosi.postinst and mkosi.finalize are two separate hooks that both always
+    # run when both files are present -- writing the same script to both meant
+    # every postinst step (package install, extlinux.conf, firmware pruning)
+    # ran twice per build.
+    postinst_path = os.path.join(workspace_path, "mkosi.postinst")
+    with open(postinst_path, "w") as f:
+        f.write(postinst_script)
+    os.chmod(postinst_path, 0o755)
 
     # 5. Firstboot script & systemd service
     firstboot_lines = ["#!/bin/bash", "set -e"]
@@ -827,7 +840,44 @@ fi
             start_index = int(start_index)
         except (TypeError, ValueError):
             start_index = DEFAULT_START_INDEX
-        firstboot_lines.append(rename_script(str(net_prefix), start_index))
+
+        # Отдельным файлом, а не вставкой в firstboot.sh: плату могут включить
+        # без единого воткнутого кабеля, и тогда переименование откладывается
+        # до первого линка. Доиграть его по горячему подключению можно только
+        # тем, что запускается повторно, а firstboot -- oneshot с
+        # RemainAfterExit и второй раз уже не стартует.
+        netnames_bin_dir = os.path.join(extra_dir, "opt", "edge", "bin")
+        os.makedirs(netnames_bin_dir, exist_ok=True)
+        netnames_path = os.path.join(netnames_bin_dir, "netnames.sh")
+        with open(netnames_path, "w") as f:
+            f.write("#!/bin/bash\n" + rename_script(str(net_prefix), start_index))
+        os.chmod(netnames_path, 0o755)
+        firstboot_lines.append("/opt/edge/bin/netnames.sh")
+
+        netnames_systemd_dir = os.path.join(extra_dir, "etc", "systemd", "system")
+        os.makedirs(netnames_systemd_dir, exist_ok=True)
+        with open(os.path.join(netnames_systemd_dir, "edge-netnames.service"), "w") as f:
+            f.write(f"""[Unit]
+Description=Edge OS Interface Naming
+ConditionPathExists=!{NETNAMES_STAMP}
+
+[Service]
+Type=oneshot
+ExecStart=/opt/edge/bin/netnames.sh
+StandardOutput=journal+console
+StandardError=journal+console
+""")
+
+        udev_dir = os.path.join(extra_dir, "etc", "udev", "rules.d")
+        os.makedirs(udev_dir, exist_ok=True)
+        with open(os.path.join(udev_dir, "80-edge-netnames.rules"), "w") as f:
+            f.write(
+                "# Naming is deferred while no port has a link: the first name must land on\n"
+                "# the port the board actually works through. Finish it when a cable appears,\n"
+                "# instead of waiting for the next reboot.\n"
+                'ACTION=="change", SUBSYSTEM=="net", ATTR{carrier}=="1", '
+                'TAG+="systemd", ENV{SYSTEMD_WANTS}+="edge-netnames.service"\n'
+            )
 
     if recipe.raw_firstboot and recipe.raw_firstboot.strip():
         firstboot_lines.append(recipe.raw_firstboot.strip())
@@ -872,6 +922,7 @@ WantedBy=multi-user.target
                 os.symlink("/etc/systemd/system/edge-firstboot.service", link_path)
             except Exception:
                 pass
+
 
     # 5b. Disk expansion service (always installed, independent of the optional
     # firstboot script above). The installer deploys images with a byte-for-byte
@@ -950,12 +1001,28 @@ log "completed"
 
     growfs_systemd_dir = os.path.join(extra_dir, "etc", "systemd", "system")
     os.makedirs(growfs_systemd_dir, exist_ok=True)
+
+    # На RK3588 карта -- транзитный носитель, и раздувать её разделы нельзя
+    # вообще: копия на NVMe идёт по конец последнего раздела, поэтому растянутая
+    # карта означает, что каждая следующая плата получит копию размером со всю
+    # карту. Расти должен только клон после переезда.
+    #
+    # Признак -- маркер провижининга: его пишут внутрь смонтированного клона
+    # ($mnt$marker), поэтому на карте его нет никогда, а на переехавшей системе
+    # он есть всегда. Метка growfs.done для этого не годится: её ставит provision
+    # в конце успешного прохода, а загрузка без воткнутого NVMe до этого места
+    # не доходит -- и карта раздувалась бы.
+    if is_armbian(recipe.distribution):
+        growfs_order = (f"After=local-fs.target edge-firstboot.service\n"
+                        f"ConditionPathExists={PROVISION_MARKER}")
+    else:
+        growfs_order = "After=local-fs.target\nBefore=edge-firstboot.service"
+
     with open(os.path.join(growfs_systemd_dir, "edge-growfs.service"), "w") as f:
-        f.write("""[Unit]
+        f.write(f"""[Unit]
 Description=Edge OS Expand Last Partition To Fill Disk
 Documentation=man:sfdisk(8)
-After=local-fs.target
-Before=edge-firstboot.service
+{growfs_order}
 ConditionPathExists=!/var/lib/edge/growfs.done
 
 [Service]

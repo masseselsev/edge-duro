@@ -3,6 +3,7 @@ from core.netnames import rename_script
 from core.packages import (
     architecture_for_distribution,
     base_distribution,
+    board_console,
     board_packages,
     distro_family,
     is_armbian,
@@ -106,11 +107,107 @@ def test_rk3588_image_carries_no_uefi_bootloader():
     assert "systemd-boot" in std_amd
 
 
-def test_provision_refuses_a_target_smaller_than_the_card():
-    # Оборванный на середине dd оставил бы цель незагружаемой.
+def test_board_console_overrides_the_generic_default():
+    # RK3588 слушает ttyS2 на 1.5 Мбод -- на ttyS0/115200 серийная консоль
+    # ядра молчит даже когда U-Boot успешно передаёт ему управление.
+    assert board_console("opi5-plus") == "ttyS2,1500000"
+    assert board_console("generic") == "ttyS0,115200"
+    assert board_console(None) == "ttyS0,115200"
+
+
+def test_extlinux_append_carries_the_boards_console(tmp_path):
+    """
+    Живой захват serial-консоли показал: до этой правки extlinux.conf нёс
+    ttyS0,115200 для любой платы, включая opi5-plus, поэтому вывод ядра
+    никогда не доходил до отладочного UART платы.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+
+    postinst = open(os.path.join(ws, "mkosi.postinst")).read()
+    assert "console=ttyS2,1500000" in postinst
+    assert "console=ttyS0,115200" not in postinst
+
+
+def test_provision_refuses_a_target_smaller_than_the_data():
+    # Оборванный на середине dd оставил бы цель незагружаемой. Сравнивается
+    # именно объём данных, а не физический размер карты: NVMe меньше карты, но
+    # больше занятых разделов -- это рабочий случай, а не отказ.
     script = provision_script()
     assert "blockdev --getsize64" in script
-    assert '"$tgt_size" -lt "$src_size"' in script
+    assert '"$tgt_size" -lt "$payload_bytes"' in script
+
+
+def test_provision_copies_only_up_to_the_last_partition():
+    """
+    Карта переезжает с платы на плату и бывает в разы больше занятых разделов.
+    Посекторная копия целиком гнала бы её полный объём на каждую плату и падала
+    бы на NVMe меньшего размера, хотя данные туда заведомо влезают.
+    """
+    script = provision_script()
+    assert "partx -g -o END" in script
+    assert "count=$(( (payload_bytes + 4194303) / 4194304 ))" in script
+
+
+def test_provision_rebuilds_the_backup_gpt_on_the_target():
+    """
+    Копия обрывается на конце последнего раздела, а резервный заголовок GPT
+    лежал в конце карты -- на цели его нет вовсе, пока он не построен заново.
+    """
+    script = provision_script()
+    assert "sfdisk --relocate gpt-bak-std" in script
+
+
+def test_provision_grows_without_cloud_guest_utils():
+    """
+    growpart живёт в cloud-guest-utils, которого нет в списке пакетов образа --
+    его вызов молча не растягивал раздел. sfdisk и resize2fs есть в базовой
+    установке.
+    """
+    script = provision_script()
+    # Проверяется вызов, а не упоминание: имя пакета осталось в комментарии.
+    assert 'growpart "' not in script
+    assert "sfdisk -N" in script
+    assert "resize2fs" in script
+
+
+def test_card_partitions_never_grow(tmp_path):
+    """
+    Копия на NVMe идёт по конец последнего раздела, поэтому растянутая карта
+    означает копию размером со всю карту на каждой следующей плате. Признак --
+    маркер провижининга: его пишут внутрь клона, на карте его нет никогда.
+    Метка growfs.done для этого не годилась -- её ставит provision в конце
+    успешного прохода, а загрузка без воткнутого NVMe до туда не доходит.
+    """
+    import os
+
+    from core.rk3588 import MARKER_PATH
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+    unit = open(os.path.join(ws, "mkosi.extra", "etc", "systemd", "system", "edge-growfs.service")).read()
+    assert f"ConditionPathExists={MARKER_PATH}" in unit
+    assert "After=local-fs.target edge-firstboot.service" in unit
+    assert "Before=edge-firstboot.service" not in unit
+
+
+def test_growfs_is_unconditional_where_nothing_migrates(tmp_path):
+    """Без клонирования расти должен сам загрузочный диск, как и раньше."""
+    import os
+
+    from core.rk3588 import MARKER_PATH
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(distribution="debian", release="bookworm"), [], ws)
+    unit = open(os.path.join(ws, "mkosi.extra", "etc", "systemd", "system", "edge-growfs.service")).read()
+    assert "Before=edge-firstboot.service" in unit
+    assert MARKER_PATH not in unit
 
 
 def test_provision_refuses_when_the_boot_device_is_unknown():
@@ -157,7 +254,68 @@ def test_interface_numbering_honours_the_start_index():
 
 def test_interface_rename_is_idempotent():
     # Второй проход после подключения ещё одного кабеля сдвинул бы номера.
-    assert '10-edge-*.link' in rename_script()
+    # Страж -- именно метка: наличие .link для этого не годится, потому что
+    # загрузка без активного порта не пишет их вовсе (см. тест ниже).
+    script = rename_script()
+    assert '[ -e "$stamp" ] && return 0' in script
+    assert 'stamp="/var/lib/edge/netnames.done"' in script
+
+
+def test_naming_is_deferred_until_a_port_has_a_link():
+    """
+    Без линка неизвестно, какой интерфейс должен стать первым. Раздача имён по
+    алфавиту закрепила бы первое имя за разъёмом, в который никто не включался.
+    """
+    script = rename_script()
+    assert 'if [ -z "$active" ]; then' in script
+    # Ни .link, ни метка не пишутся -- проверка обязана повториться позже.
+    body = script.split('if [ -z "$active" ]; then', 1)[1].split("fi", 1)[0]
+    assert "return 0" in body
+    assert "edge_write_link" not in body
+    assert "$stamp" not in body
+
+
+def test_first_name_goes_to_the_port_with_a_link():
+    script = rename_script("edge", 1)
+    active_at = script.index('edge_write_link "$active" "$prefix$idx"')
+    rest_at = script.index('[ "$iface" = "$active" ] && continue')
+    assert active_at < rest_at, "активный порт должен получить имя раньше остальных"
+    assert "idx=1" in script
+
+
+def test_hotplug_finishes_deferred_naming(tmp_path):
+    """
+    firstboot -- oneshot с RemainAfterExit, повторно он не стартует, поэтому
+    доигрывать отложенное переименование обязан отдельный юнит.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(network_config={"prefix": "edge", "start_index": 0}), [], ws)
+
+    rule = open(os.path.join(ws, "mkosi.extra", "etc", "udev", "rules.d", "80-edge-netnames.rules")).read()
+    assert 'ATTR{carrier}=="1"' in rule
+    assert "edge-netnames.service" in rule
+
+    unit = open(os.path.join(ws, "mkosi.extra", "etc", "systemd", "system", "edge-netnames.service")).read()
+    assert "RemainAfterExit" not in unit, "юнит должен запускаться повторно на каждый линк"
+    assert "ConditionPathExists=!/var/lib/edge/netnames.done" in unit
+
+    script = os.path.join(ws, "mkosi.extra", "opt", "edge", "bin", "netnames.sh")
+    assert os.access(script, os.X_OK)
+    assert open(script).read().startswith("#!/bin/bash")
+
+
+def test_card_leaves_no_interface_names_for_the_next_board():
+    """
+    .link привязаны к MAC той платы, на которой карта отработала. На следующей
+    они не совпадут ни с чем, и порты остались бы с именами от ядра.
+    """
+    script = provision_script()
+    assert "rm -f /etc/systemd/network/10-edge-*.link" in script
+    assert "rm -f /var/lib/edge/netnames.done" in script
 
 
 def _armbian_recipe(**over):

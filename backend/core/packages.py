@@ -70,11 +70,22 @@ ARMBIAN_BOARD_DTB: Dict[str, str] = {
     "opi5-plus": "rockchip/rk3588-orangepi-5-plus.dtb",
 }
 
+# Отладочный UART у каждой платы свой -- RK3588 слушает ttyS2 на 1.5 Мбод,
+# а не стандартные ttyS0/115200. Без этого серийная консоль ядра молчит даже
+# когда U-Boot успешно передаёт ему управление.
+ARMBIAN_BOARD_CONSOLE: Dict[str, str] = {
+    "opi5-plus": "ttyS2,1500000",
+}
+
 ARMBIAN_REPO_URL = "http://apt.armbian.com"
 
 
 def board_dtb(board: Any) -> str:
     return ARMBIAN_BOARD_DTB.get((board or "").lower(), "")
+
+
+def board_console(board: Any) -> str:
+    return ARMBIAN_BOARD_CONSOLE.get((board or "").lower(), "ttyS0,115200")
 
 
 def armbian_source_line(release: Any) -> str:

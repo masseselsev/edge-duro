@@ -165,6 +165,11 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
         f"ImageId={recipe.name.lower().replace(' ', '_')}",
         "Format=disk",
         "OutputDirectory=output",
+        # systemd-repart иначе берёт размер сектора у loop-устройства сборочного
+        # хоста -- на этом воркере это 4096, а не 512. Встроенный в образ FAT
+        # с 4K-секторами не читает загрузчик RK3588 (2017.09), он ждёт носитель
+        # с 512-байтными секторами, каким и будет настоящая SD-карта/NVMe.
+        "SectorSize=512",
         "",
         "[Content]",
     ]

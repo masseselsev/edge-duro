@@ -515,6 +515,11 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               </div>
             </div>
             <p className="text-[11px] text-zinc-500">{t('ifacePrefixHint')}</p>
+            {ifacePrefix.trim() && (
+              <p className="text-[11px] text-zinc-400 bg-zinc-950/60 border border-zinc-800 rounded-lg px-2.5 py-2 leading-relaxed">
+                {t('ifaceFirstPortNote', { name: `${ifacePrefix.trim()}${ifaceStartIndex}` })}
+              </p>
+            )}
           </div>
 
           {/* Credentials: root password + additional login accounts */}

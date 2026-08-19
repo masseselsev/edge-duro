@@ -48,6 +48,20 @@ def test_skipped_repository_is_not_written(tmp_path):
     assert not os.path.exists(_custom_list(ws))
 
 
+def test_image_pins_512_byte_sectors(tmp_path):
+    """
+    Регрессия: без SectorSize= systemd-repart берёт размер сектора у
+    loop-устройства сборочного хоста (на воркере это 4096), и встроенный в
+    образ FAT с 4K-секторами не читается загрузчиком RK3588 на настоящей
+    SD-карте ("FAT sector size mismatch (fs=4096, dev=512)").
+    """
+    ws = str(tmp_path)
+    conf = generate_mkosi_conf(make_recipe(repositories=[], kernel_params=None,
+                                            raw_mkosi_conf=None), ws)
+
+    assert "SectorSize=512" in conf
+
+
 def test_stale_source_from_an_earlier_build_is_removed(tmp_path):
     """Регрессия: фильтрация без удаления оставляла файл от прошлой сборки."""
     ws = str(tmp_path)

@@ -18,6 +18,10 @@ DEFAULT_START_INDEX = 0
 
 LINK_DIR = "/etc/systemd/network"
 
+# Метка "имена закреплены". Отдельный файл, а не наличие .link: загрузка без
+# единого активного порта не пишет .link вовсе и обязана повториться позже.
+STAMP_PATH = "/var/lib/edge/netnames.done"
+
 
 def rename_script(prefix: str = DEFAULT_PREFIX, start_index: int = DEFAULT_START_INDEX) -> str:
     """
@@ -32,13 +36,14 @@ edge_rename_interfaces() {{
   local prefix="{prefix}"
   local idx={start_index}
   local link_dir="{LINK_DIR}"
+  local stamp="{STAMP_PATH}"
   local active="" iface mac path
 
-  # Уже переименовано -- второй проход выдал бы другие номера, если к плате
-  # успели подключить ещё один кабель.
-  if ls "$link_dir"/10-edge-*.link >/dev/null 2>&1; then
-    return 0
-  fi
+  # Имена уже закреплены -- второй проход выдал бы другие номера, если к плате
+  # успели подключить ещё один кабель. Признак -- именно метка, а не наличие
+  # .link-файлов: без активного порта проход не пишет их вовсе и обязан
+  # повториться на следующей загрузке.
+  [ -e "$stamp" ] && return 0
   mkdir -p "$link_dir"
 
   # Виртуальные интерфейсы (bridge, veth, lo) не имеют записи в /sys/class/net/*/device.
@@ -59,10 +64,18 @@ edge_rename_interfaces() {{
     echo "[NETNAME] $dev ($mac) -> $name"
   }}
 
-  if [ -n "$active" ]; then
-    edge_write_link "$active" "$prefix$idx"
-    idx=$((idx + 1))
+  # Без активного порта неизвестно, какой интерфейс должен стать первым.
+  # Раздать имена по алфавиту -- значит закрепить их навсегда и почти наверняка
+  # не тем разъёмом: первое имя уехало бы на порт, в который никто не включался.
+  # Ничего не пишем и не ставим метку -- проверка повторится на следующей
+  # загрузке и при горячем подключении кабеля.
+  if [ -z "$active" ]; then
+    echo "[NETNAME] no port has a link yet -- naming deferred until one is connected."
+    return 0
   fi
+
+  edge_write_link "$active" "$prefix$idx"
+  idx=$((idx + 1))
 
   for iface in $(ls /sys/class/net); do
     [ -e "/sys/class/net/$iface/device" ] || continue
@@ -70,6 +83,9 @@ edge_rename_interfaces() {{
     edge_write_link "$iface" "$prefix$idx"
     idx=$((idx + 1))
   done
+
+  mkdir -p "$(dirname "$stamp")"
+  : > "$stamp"
 }}
 
 edge_rename_interfaces

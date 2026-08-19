@@ -173,6 +173,22 @@ def download_artifact(filename: str):
     )
 
 
+def _clear_build_reference(db: Session, filename: str) -> None:
+    """
+    Build History показывает кнопки RAW.XZ/ISO по artifact_path/iso_artifact_path
+    в builds -- без этого удалённый через Storage файл продолжал бы висеть там
+    кнопкой на 404.
+    """
+    builds = db.query(models.Build).filter(
+        (models.Build.artifact_path.isnot(None)) | (models.Build.iso_artifact_path.isnot(None))
+    ).all()
+    for b in builds:
+        if b.artifact_path and os.path.basename(b.artifact_path) == filename:
+            b.artifact_path = None
+        if b.iso_artifact_path and os.path.basename(b.iso_artifact_path) == filename:
+            b.iso_artifact_path = None
+
+
 @router.delete("/artifacts/{filename}")
 def delete_single_artifact(
     filename: str,
@@ -191,6 +207,8 @@ def delete_single_artifact(
 
     try:
         os.remove(file_path)
+        _clear_build_reference(db, filename)
+        db.commit()
         log_user_action(db, current_user.username, "DELETE_STORAGE_ARTIFACT", f"Deleted storage artifact '{filename}'", request)
         return {"status": "success", "message": f"Artifact '{filename}' deleted successfully."}
     except Exception as e:
@@ -213,9 +231,11 @@ def delete_bulk_artifacts(
         if file_path.startswith(os.path.abspath(outputs_dir)) and os.path.exists(file_path):
             try:
                 os.remove(file_path)
+                _clear_build_reference(db, fn)
                 deleted.append(fn)
             except Exception as e:
                 failed.append({"filename": fn, "error": str(e)})
 
+    db.commit()
     log_user_action(db, current_user.username, "BULK_DELETE_STORAGE_ARTIFACTS", f"Deleted {len(deleted)} storage artifacts", request)
     return {"status": "success", "deleted": deleted, "failed": failed}

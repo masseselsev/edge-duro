@@ -154,7 +154,7 @@ export default function BuildsTab() {
                             <span>RAW.XZ</span>
                           </a>
                         )}
-                        {(build.iso_artifact_path || build.status === 'SUCCESS') && (
+                        {build.iso_artifact_path && (
                           <a
                             href={`/api/builds/${build.id}/download?format=iso`}
                             className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"

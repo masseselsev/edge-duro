@@ -41,9 +41,29 @@ ALWAYS_EDGE_PACKAGES = ("edge-base", "edge-python3-core")
 # (via workspace.py's groupadd -f) creates an inert group -- nothing on the
 # system checks membership in it, so the recipe's sudo checkbox would
 # silently grant nothing on a recipe that happens not to list this package.
+# "zstd" is not here for the format itself: initramfs.conf asks for
+# COMPRESS=zstd, but without the binary mkinitramfs silently falls back to gzip
+# ("W: No zstd in ..., using gzip"), and its gzip is single-threaded. With zstd
+# installed the command is built as "zstd -q -1 -T0", i.e. initramfs
+# compression runs on every core -- this is the longest single-threaded stage
+# of a build. It also makes the initrd faster to unpack on the board itself.
+# "openssh-server" -- workspace.py writes /etc/ssh/sshd_config.d/edge.conf and
+# lays out authorized_keys regardless of the recipe's package list, but without
+# the package itself that is configuration for a daemon the image does not
+# carry: the board brings up the network and the port (2222 by default) sits
+# there answering "connection refused". Same class of bug as described for
+# "sudo" above -- just a different package.
+# "fdisk" -- provides sfdisk/cfdisk. On Debian util-linux still pulls them in,
+# but as of Ubuntu 24.04 they live in a package of their own; the provisioning
+# script (rk3588.py) and growfs (workspace.py) both call
+# "sfdisk -N ... --force" to extend the last partition after the move to NVMe.
+# Without the package the command fails silently ("command not found" under
+# "|| true") -- the partition never grows, while neither the build nor the
+# provisioning run reports anything wrong.
 _REQUIRED_PACKAGES = (
     "apt", "bash", "coreutils", "login", "sudo",
-    "systemd-boot", "systemd-sysv", "initramfs-tools",
+    "systemd-boot", "systemd-sysv", "initramfs-tools", "zstd", "openssh-server",
+    "fdisk",
 )
 
 # Armbian публикует репозиторий и под Debian-, и под Ubuntu-суиты; по release

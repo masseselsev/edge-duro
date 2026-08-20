@@ -162,6 +162,8 @@ class RecipeBase(BaseModel):
     network_config: Optional[Dict[str, Any]] = None
     ssh_keys: List[str] = Field(default_factory=list)
     ssh_port: int = Field(default=2222, ge=1, le=65535)
+    ssh_password_auth: bool = True
+    ssh_permit_root_login: bool = False
     root_password: Optional[str] = None
     users: List[UserAccountSchema] = Field(default_factory=list)
     is_dev: bool = Field(default=False)

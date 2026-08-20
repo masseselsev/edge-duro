@@ -153,6 +153,74 @@ def test_provision_copies_only_up_to_the_last_partition():
     assert "count=$(( (payload_bytes + 4194303) / 4194304 ))" in script
 
 
+def test_provision_is_not_killed_mid_clone(tmp_path):
+    """
+    Реальный отказ: со штатным DefaultTimeoutStartSec (90 с) systemd убивал
+    firstboot посреди dd. На NVMe уезжала таблица разделов и первые разделы,
+    корень оставался пустым, SPI не прошивался -- ядро падало в initramfs с
+    "LABEL=edgeroot does not exist".
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+    unit = open(os.path.join(ws, "mkosi.extra", "etc", "systemd", "system", "edge-firstboot.service")).read()
+    assert "TimeoutStartSec=30min" in unit
+
+
+def test_incomplete_clone_does_not_look_provisioned():
+    """
+    Прошить SPI и поставить маркер по недокопированной цели -- значит выдать
+    полурабочую плату за готовую и не повторить попытку на следующей загрузке.
+    """
+    script = provision_script()
+    check_at = script.index("blkid -t LABEL=edgeroot")
+    spi_at = script.index("edge_rk3588_write_spi\n  edge_rk3588_individualize")
+    assert check_at < spi_at, "проверка обязана идти до прошивки SPI и маркера"
+
+
+def test_target_is_reprovisioned_even_when_already_written():
+    """
+    На этапе отладки цель перезаписывается каждый раз, когда виден NVMe:
+    иначе проверка нового образа требовала бы ручной зачистки диска.
+    """
+    script = provision_script()
+    assert "is already provisioned" not in script
+
+
+def test_completion_is_signalled_on_the_led():
+    """
+    Красный светодиод припаян к линии питания и ничего не значит. Ровное
+    мигание зелёного -- единственный признак успеха, видимый без serial.
+    """
+    script = provision_script()
+    assert "edge_rk3588_led_done" in script
+    assert "/sys/class/leds" in script
+    # Имя каталога зависит от device tree, жёсткое имя сломалось бы на другом ядре.
+    assert "delay_on" in script and "delay_off" in script
+
+    led_at = script.index("  edge_rk3588_led_done\n")
+    done_at = script.index("[PROVISION] Done.")
+    assert led_at < done_at
+
+
+def test_result_is_announced_on_the_active_console():
+    """
+    Светодиод виден, только если на плату смотрят. Тот же результат словами
+    должен попасть на активную консоль и остаться над приглашением логина.
+    """
+    script = provision_script()
+    assert "/dev/tty1" in script and "/dev/console" in script
+    assert "/etc/issue" in script
+    # Строка переписывается, а не копится: провижининг повторяется каждую загрузку.
+    assert "sed -i '/^\\[EDGE\\]/d' /etc/issue" in script
+    # Отказ обязан быть виден так же, как успех.
+    assert "NVMe provisioning FAILED" in script
+    assert "NVMe provisioned OK" in script
+
+
 def test_provision_rebuilds_the_backup_gpt_on_the_target():
     """
     Копия обрывается на конце последнего раздела, а резервный заголовок GPT
@@ -164,24 +232,78 @@ def test_provision_rebuilds_the_backup_gpt_on_the_target():
 
 def test_provision_grows_without_cloud_guest_utils():
     """
-    growpart живёт в cloud-guest-utils, которого нет в списке пакетов образа --
-    его вызов молча не растягивал раздел. sfdisk и resize2fs есть в базовой
-    установке.
+    growpart lives in cloud-guest-utils, which is not in the image's package
+    list -- calling it silently failed to grow anything. resize2fs comes with
+    the base install (e2fsprogs); for sfdisk see
+    test_fdisk_package_ships_sfdisk_for_growfs below -- on Ubuntu 24.04 it is
+    not part of util-linux by default.
     """
     script = provision_script()
-    # Проверяется вызов, а не упоминание: имя пакета осталось в комментарии.
+    # The invocation is checked, not the mention: the package name still
+    # appears in a comment.
     assert 'growpart "' not in script
     assert "sfdisk -N" in script
     assert "resize2fs" in script
 
 
+def test_fdisk_package_ships_sfdisk_for_growfs():
+    """
+    provision_script() and growfs (workspace.py) both call "sfdisk -N ...
+    --force" on the last partition after the move to NVMe. On Ubuntu 24.04
+    sfdisk is split out of util-linux into a package of its own, "fdisk" --
+    without it the command fails silently under "|| true": the partition never
+    grows while provisioning reports nothing wrong. That is exactly how it was
+    caught on real hardware -- "[PROVISION] WARNING: could not rebuild the
+    backup GPT" in the board's log.
+    """
+    std, _ = resolve_package_list(
+        make_recipe(distribution="armbian", release="noble", architecture="arm64",
+                    board="opi5-plus", packages=[])
+    )
+    assert "fdisk" in std
+
+
 def test_card_partitions_never_grow(tmp_path):
     """
-    Копия на NVMe идёт по конец последнего раздела, поэтому растянутая карта
-    означает копию размером со всю карту на каждой следующей плате. Признак --
-    маркер провижининга: его пишут внутрь клона, на карте его нет никогда.
-    Метка growfs.done для этого не годилась -- её ставит provision в конце
-    успешного прохода, а загрузка без воткнутого NVMe до туда не доходит.
+    The copy onto NVMe runs up to the end of the last partition, so a grown card
+    would mean a card-sized copy on every next board.
+
+    On armbian only provisioning grows anything -- offline, on a target that is
+    not mounted yet. There is no edge-growfs unit here at all: it would redo the
+    same work a second time, and its gate (ConditionPathExists on the marker)
+    never fired anyway while the marker was written into a shadowed mount-point
+    directory.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+    systemd_dir = os.path.join(ws, "mkosi.extra", "etc", "systemd", "system")
+
+    assert not os.path.exists(os.path.join(systemd_dir, "edge-growfs.service"))
+    assert not os.path.exists(
+        os.path.join(systemd_dir, "multi-user.target.wants", "edge-growfs.service")
+    )
+
+    # Growing has not gone anywhere -- it lives inside provisioning and is
+    # aimed at the target.
+    script = provision_script()
+    assert "sfdisk -N" in script
+    assert "resize2fs" in script
+
+
+def test_provision_marker_is_not_shadowed_by_a_mount(tmp_path):
+    """
+    The marker used to be written into /var/opt/edge inside the clone's mounted
+    root, i.e. into a mount-point directory: on a running system the separate
+    edgestor partition is mounted over it and the marker became invisible --
+    `cat` on the board returned "No such file or directory" even though the file
+    was there in the image.
+
+    The separate partitions are read from the generated fstab rather than from a
+    list in the test: add a fourth partition and this check catches it by itself.
     """
     import os
 
@@ -190,10 +312,20 @@ def test_card_partitions_never_grow(tmp_path):
 
     ws = str(tmp_path)
     populate_extra_tree(_armbian_recipe(), [], ws)
-    unit = open(os.path.join(ws, "mkosi.extra", "etc", "systemd", "system", "edge-growfs.service")).read()
-    assert f"ConditionPathExists={MARKER_PATH}" in unit
-    assert "After=local-fs.target edge-firstboot.service" in unit
-    assert "Before=edge-firstboot.service" not in unit
+    fstab = open(os.path.join(ws, "mkosi.extra", "etc", "fstab")).read()
+
+    separate = [
+        parts[1]
+        for parts in (line.split() for line in fstab.splitlines())
+        if len(parts) >= 2 and parts[0].startswith("LABEL=") and parts[1] != "/"
+    ]
+    assert separate, "fstab must describe the separate partitions"
+
+    for mountpoint in separate:
+        assert not MARKER_PATH.startswith(mountpoint.rstrip("/") + "/"), (
+            f"marker {MARKER_PATH} sits on separate partition {mountpoint} "
+            f"and will be shadowed by the mount"
+        )
 
 
 def test_growfs_is_unconditional_where_nothing_migrates(tmp_path):
@@ -244,6 +376,40 @@ def test_interface_rename_binds_to_mac_not_kernel_name():
     script = rename_script("edge", 0)
     assert "MACAddress=" in script
     assert "[Link]" in script
+
+
+def test_names_are_applied_live_not_only_through_link_files():
+    """
+    On-board NICs (r8169 on RK3588) are named by udev while still in the
+    initramfs, which never carries /etc/systemd/network/*.link at all, and after
+    switch_root udev no longer renames interfaces that already exist. Verified on
+    the board: the .link file was there with the correct MAC, `udevadm
+    test-builtin net_setup_link` resolved edge0, and the live name stayed
+    enP4p65s0. So the name has to be forced by hand.
+    """
+    script = rename_script()
+    assert "ip link set dev" in script
+    assert 'name "$want"' in script
+    # Only a downed interface can be renamed.
+    down_at = script.index('ip link set dev "$cur" down')
+    rename_at = script.index('ip link set dev "$cur" name "$want"')
+    assert down_at < rename_at, "the interface must be downed before renaming"
+
+
+def test_live_naming_repeats_even_after_names_are_decided():
+    """
+    The netnames.done stamp stops only the CHOICE of names. The rename itself
+    has to repeat on every boot: the kernel hands its own names back after each
+    start, and on the clone (where the stamp is already set) it would otherwise
+    never happen at all.
+    """
+    script = rename_script()
+    assert script.rstrip().endswith("edge_apply_live_names")
+    # Live application lives outside the function the stamp switches off.
+    decide = script.index("edge_rename_interfaces() {")
+    apply_fn = script.index("edge_apply_live_names() {")
+    assert apply_fn > decide
+    assert '[ -e "$stamp" ]' not in script[apply_fn:]
 
 
 def test_interface_numbering_honours_the_start_index():
@@ -306,6 +472,50 @@ def test_hotplug_finishes_deferred_naming(tmp_path):
     script = os.path.join(ws, "mkosi.extra", "opt", "edge", "bin", "netnames.sh")
     assert os.access(script, os.X_OK)
     assert open(script).read().startswith("#!/bin/bash")
+
+
+def test_addresses_survive_the_rename(tmp_path):
+    """
+    edge-netconf runs Before=edge-firstboot, i.e. it writes .network files BEFORE
+    netnames renames the interface. With [Match] Name=enP4p65s0 the file stopped
+    matching after the rename and the interface was left without any address at
+    all -- the board fell off the network for good. The MAC never changes.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(network_config={"prefix": "edge", "start_index": 0}), [], ws)
+    netconf = open(os.path.join(ws, "mkosi.extra", "opt", "edge", "bin", "edge-netconf.sh")).read()
+
+    assert 'PRIMARY_MATCH="MACAddress=$MAC"' in netconf
+    assert 'CAM_MATCH="MACAddress=$CAM_MAC"' in netconf
+    # What goes into the .network file is the variable, not the interface name.
+    assert "\nName=$PRIMARY\n" not in netconf
+    assert "\nName=$n\n" not in netconf
+
+
+def test_catch_all_network_covers_renamed_interfaces(tmp_path):
+    """
+    The "en* eth*" glob does not cover edge0. On an image without edge-netconf
+    (where .network files are written per MAC) a renamed interface would be left
+    with no matching .network at all, and therefore with no address.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(network_config={"prefix": "edge", "start_index": 0}), [], ws)
+
+    net_dir = os.path.join(ws, "mkosi.extra", "etc", "systemd", "network")
+    blob = "".join(
+        open(os.path.join(net_dir, name)).read()
+        for name in os.listdir(net_dir)
+        if name.endswith(".network")
+    )
+    assert "edge*" in blob
 
 
 def test_card_leaves_no_interface_names_for_the_next_board():

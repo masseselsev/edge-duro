@@ -80,6 +80,8 @@ def run_migrations_safety(db: Session):
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ssh_port INTEGER DEFAULT 2222;"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ignore_missing_arch_packages BOOLEAN DEFAULT FALSE;"))
         db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS board VARCHAR DEFAULT 'generic';"))
+        db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ssh_password_auth BOOLEAN DEFAULT TRUE;"))
+        db.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS ssh_permit_root_login BOOLEAN DEFAULT FALSE;"))
         db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS missing_packages JSON DEFAULT '[]'::json;"))
         db.execute(text("ALTER TABLE settings ADD COLUMN IF NOT EXISTS log_retention_days INTEGER DEFAULT 3;"))
         db.execute(text("ALTER TABLE builds ADD COLUMN IF NOT EXISTS iso_artifact_path VARCHAR;"))

@@ -1,33 +1,41 @@
 """
-Провижининг RK3588-плат (Orange Pi 5 Plus) с многоразовой microSD.
+Provisioning RK3588 boards (Orange Pi 5 Plus) from a reusable microSD card.
 
-Одна и та же карта проходит по всем платам подряд: на каждой она клонирует
-себя на NVMe, кладёт загрузчик в SPI и делает клон уникальным. Поэтому
-признак "уже сделано" хранится на цели, а не на карте -- иначе карта
-отработала бы ровно один раз.
+One and the same card goes through every board in turn: on each one it clones
+itself onto the NVMe, puts the bootloader into SPI and makes the clone unique.
+That is why the "already done" mark is kept on the target rather than on the
+card -- otherwise the card would work exactly once.
 
-Загрузчик пишется скриптом самого Armbian (/usr/lib/u-boot/platform_install.sh
-из linux-u-boot-orangepi5-plus-vendor): смещения idbloader.img/u-boot.itb и
-выбор rkspi_loader.img -- его забота, дублировать их здесь значит однажды
-разойтись с апстримом.
+The bootloader is written by Armbian's own script
+(/usr/lib/u-boot/platform_install.sh from linux-u-boot-orangepi5-plus-vendor):
+the idbloader.img/u-boot.itb offsets and the choice of rkspi_loader.img are its
+business, and duplicating them here would mean drifting from upstream one day.
 """
 
 import os
 
-MARKER_PATH = "/var/opt/edge/.edge-provisioned"
+# The marker has to live on the clone's ROOT filesystem. /var/opt/edge is a
+# partition of its own (LABEL=edgestor), so writing there through the mounted
+# root landed inside the mount-point directory: on a running system edgestor is
+# mounted over it and the marker became invisible (`cat` returned "No such file
+# or directory" even though the file was present in the image). /var/lib is
+# never a separate partition -- netnames.done, growfs.done and netconf.done all
+# live there too.
+MARKER_PATH = "/var/lib/edge/.edge-provisioned"
 
 UBOOT_PLATFORM_SCRIPT = "/usr/lib/u-boot/platform_install.sh"
 
 
 def provision_script(marker_path: str = MARKER_PATH) -> str:
     """
-    Кусок firstboot.sh: клонирование на NVMe, загрузчик в SPI, индивидуализация.
+    The part of firstboot.sh that clones onto NVMe, writes the bootloader into
+    SPI and individualizes the clone.
 
-    Запускается на каждой загрузке -- на уже провижиненной плате выходит на
-    проверке маркера.
+    Runs on every boot -- on a board booted from the target it returns at the
+    boot-device check.
     """
     return f"""
-# --- RK3588 (Orange Pi 5 Plus): клонирование на NVMe -------------------------
+# --- RK3588 (Orange Pi 5 Plus): cloning onto NVMe ----------------------------
 edge_rk3588_provision() {{
   local target="/dev/nvme0n1"
   local marker="{marker_path}"
@@ -38,8 +46,8 @@ edge_rk3588_provision() {{
     return 0
   fi
 
-  # Носитель, с которого мы сейчас загружены, трогать нельзя ни при каких
-  # обстоятельствах: перепутать его с целью -- значит затереть себя на ходу.
+  # The medium we are currently booted from must never be touched under any
+  # circumstances: mistaking it for the target means wiping ourselves midway.
   local root_src boot_disk
   root_src="$(findmnt -no SOURCE / 2>/dev/null || true)"
   boot_disk="$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -1 || true)"
@@ -52,11 +60,12 @@ edge_rk3588_provision() {{
     return 0
   fi
 
-  # Карта -- транзитный носитель и бывает в разы больше занятых разделов.
-  # Копировать её целиком значит гнать десятки лишних гигабайт и требовать
-  # NVMe не меньше карты; достаточно скопировать по конец последнего раздела.
-  # Оборванный на середине dd оставил бы цель с обрубленной таблицей разделов,
-  # то есть небезопасно загружаемой -- поэтому цель меньше данных отвергается.
+  # The card is a transit medium and is often many times larger than the
+  # partitions actually in use. Copying it whole would push tens of needless
+  # gigabytes and demand an NVMe no smaller than the card; copying up to the end
+  # of the last partition is enough. A dd cut short midway would leave the
+  # target with a truncated partition table, i.e. not safely bootable -- which
+  # is why a target smaller than the payload is rejected.
   local last_end payload_bytes tgt_size
   last_end="$(partx -g -o END "/dev/$boot_disk" 2>/dev/null | tail -1 | tr -d ' ')"
   if [ -z "$last_end" ]; then
@@ -70,19 +79,13 @@ edge_rk3588_provision() {{
     return 0
   fi
 
-  # Маркер лежит на цели, а не на карте: карта переезжает на следующую плату.
+  # Provisioning is unconditional: while debugging, the target is rewritten
+  # every time an NVMe is visible in the system, even one already written. The
+  # marker still goes onto the target -- it is the record that the clone was
+  # completed and verified. Once debugging is over a condition will come back
+  # here (the plan is a jumper between pins 39 and 40, GND and GPIO3_C4).
   mkdir -p "$mnt"
   local part
-  for part in $(lsblk -lno NAME "$target" | tail -n +2); do
-    if mount "/dev/$part" "$mnt" 2>/dev/null; then
-      if [ -f "$mnt$marker" ]; then
-        umount "$mnt"
-        echo "[PROVISION] $target is already provisioned."
-        return 0
-      fi
-      umount "$mnt"
-    fi
-  done
 
   echo "[PROVISION] Cloning $boot_disk -> $target ($payload_bytes B) ..."
   sync
@@ -90,9 +93,9 @@ edge_rk3588_provision() {{
      conv=fsync status=progress
   sync
 
-  # Копия обрывается на конце последнего раздела, а резервный заголовок GPT
-  # лежал в самом конце карты -- на цели его нет вовсе, пока он не построен
-  # заново по первичному заголовку.
+  # The copy stops at the end of the last partition, while the backup GPT
+  # header sat at the very end of the card -- on the target it is missing
+  # entirely until it is rebuilt from the primary header.
   if ! sfdisk --relocate gpt-bak-std "$target" >/dev/null 2>&1; then
     echo "[PROVISION] WARNING: could not rebuild the backup GPT on $target."
   fi
@@ -100,15 +103,21 @@ edge_rk3588_provision() {{
   partprobe "$target" 2>/dev/null || true
   udevadm settle 2>/dev/null || true
 
-  # Копия снята с смонтированной ФС, поэтому журнал на клоне заведомо грязный.
+  # The copy was taken from a mounted filesystem, so the clone's journal is
+  # dirty by definition.
   for part in $(lsblk -lno NAME "$target" | tail -n +2); do
     e2fsck -fy "/dev/$part" >/dev/null 2>&1 || true
   done
 
-  # Последний раздел приехал размером с образ -- растянуть его на всю ёмкость
-  # диска. sfdisk и resize2fs есть в базовой установке (util-linux, e2fsprogs);
-  # growpart живёт в cloud-guest-utils, который в список пакетов образа не
-  # входит, так что его вызов молча ничего не делал.
+  # The last partition arrived image-sized -- stretch it over the full capacity
+  # of the disk. This is the only place the clone is grown: it happens offline,
+  # on a target that is not mounted yet, which is why armbian ships no separate
+  # edge-growfs unit. resize2fs comes with the base install (e2fsprogs); as of
+  # Ubuntu 24.04 sfdisk lives in a package of its own, "fdisk" (split out of
+  # util-linux) -- it is in _REQUIRED_PACKAGES/packages.py, but the reminder
+  # stays here in case someone tries to drop it from there as "not obviously
+  # needed". growpart lives in cloud-guest-utils, which is not in the image's
+  # package list at all, so calling it did nothing, silently.
   local last_part last_num
   last_part="$(lsblk -nrpo NAME,TYPE "$target" 2>/dev/null | awk '$2=="part" {{p=$1}} END {{print p}}')"
   last_num="$(echo "$last_part" | grep -o '[0-9]*$')"
@@ -120,24 +129,77 @@ edge_rk3588_provision() {{
     resize2fs "$last_part" >/dev/null 2>&1 || true
   fi
 
+  # A truncated copy would leave the board with SPI flashed but no root: the
+  # kernel starts and drops into the initramfs with "LABEL=edgeroot does not
+  # exist", while the provisioning marker would claim everything was done.
+  # Better to stop here, leaving the card bootable and the target plainly
+  # unprovisioned -- the next boot will try again.
+  udevadm settle 2>/dev/null || true
+  if ! blkid -t LABEL=edgeroot "$target"* >/dev/null 2>&1; then
+    echo "[PROVISION] Clone incomplete: no edgeroot filesystem on $target -- SPI and marker left untouched."
+    edge_rk3588_announce "NVMe provisioning FAILED -- clone incomplete, card left bootable"
+    return 0
+  fi
+
   edge_rk3588_write_spi
   edge_rk3588_individualize "$target" "$mnt" "$marker"
 
-  # Имена интерфейсов привязаны к MAC этой платы и на следующей не совпадут ни
-  # с чем -- там интерфейсы остались бы с именами от ядра. Клон уже снят и свои
-  # имена сохранил, а карта уезжает чистой и переименует порты заново.
+  # Interface names are bound to this board's MACs and would match nothing on
+  # the next one -- its interfaces would simply keep their kernel names. The
+  # clone is already taken and kept its own names, while the card leaves clean
+  # and will name the ports again from scratch.
   #
-  # Раздувать разделы карты не нужно и здесь: edge-growfs на armbian заведён
-  # под маркером провижининга, которого на карте нет, поэтому она остаётся
-  # размером с образ сама по себе.
+  # Nothing grows the card's partitions: armbian ships no edge-growfs unit at
+  # all (see workspace.py), and what was grown above was the target, not the
+  # card. The card stays image-sized and moves to the next board as it is.
   rm -f /etc/systemd/network/10-edge-*.link
   rm -f /var/lib/edge/netnames.done
 
+  edge_rk3588_led_done
+  edge_rk3588_announce "NVMe provisioned OK -- remove the card and reboot"
   echo "[PROVISION] Done. NVMe is bootable, the card can be moved to the next board."
 }}
 
-# Плата не умеет стартовать с NVMe сама: boot ROM читает только SPI/eMMC/SD.
-# Загрузчик в SPI -- это то, что позволяет вынуть карту насовсем.
+# The LED is only visible if somebody is looking at the board. The same result
+# goes in words to where a human will actually read it: the active console
+# (HDMI -- tty1, serial -- console) and /etc/issue, so the line stays above the
+# login prompt even after the boot output has scrolled past.
+edge_rk3588_announce() {{
+  local msg="$1" dev
+  for dev in /dev/tty1 /dev/console; do
+    [ -w "$dev" ] && printf '\\n*** %s ***\\n\\n' "$msg" > "$dev" 2>/dev/null || true
+  done
+  # Our own line is rewritten rather than accumulated: while debugging,
+  # provisioning repeats on every boot.
+  if [ -f /etc/issue ]; then
+    sed -i '/^\\[EDGE\\]/d' /etc/issue 2>/dev/null || true
+    printf '[EDGE] %s\\n' "$msg" >> /etc/issue
+  fi
+}}
+
+# The board's only controllable LED is the green one: the red is wired straight
+# to the power rail and lights up from the mere fact of voltage being applied.
+# The directory name under /sys/class/leds comes from the device tree and
+# differs between kernels, so the first suitable one is taken rather than a
+# hardcoded name. A steady blink once a second is the "clone written and
+# verified" signal, visible without a serial console.
+edge_rk3588_led_done() {{
+  local led
+  for led in /sys/class/leds/*status* /sys/class/leds/*green* /sys/class/leds/*; do
+    [ -d "$led" ] || continue
+    [ -w "$led/trigger" ] || continue
+    echo timer > "$led/trigger" 2>/dev/null || continue
+    echo 500 > "$led/delay_on" 2>/dev/null || true
+    echo 500 > "$led/delay_off" 2>/dev/null || true
+    echo "[PROVISION] Completion signalled on LED $(basename "$led")."
+    return 0
+  done
+  echo "[PROVISION] No writable LED found -- completion not signalled."
+}}
+
+# The board cannot start from NVMe on its own: the boot ROM only reads
+# SPI/eMMC/SD. The bootloader in SPI is what makes it possible to remove the
+# card for good.
 edge_rk3588_write_spi() {{
   local script="{UBOOT_PLATFORM_SCRIPT}"
   if [ ! -f "$script" ]; then
@@ -156,9 +218,9 @@ edge_rk3588_write_spi() {{
   sync
 }}
 
-# Клон обязан отличаться от оригинала до того, как впервые загрузится:
-# одинаковые machine-id и ключи SSH на всём парке -- это поломанный DHCP-lease
-# и бессмысленная проверка подлинности хоста.
+# The clone has to differ from the original before it ever boots: identical
+# machine-ids and SSH keys across the fleet mean broken DHCP leases and a
+# meaningless host authenticity check.
 edge_rk3588_individualize() {{
   local target="$1" mnt="$2" marker="$3"
   local rootpart=""
@@ -183,8 +245,9 @@ edge_rk3588_individualize() {{
   rm -f "$mnt/var/lib/dbus/machine-id"
   rm -f "$mnt"/etc/ssh/ssh_host_*key "$mnt"/etc/ssh/ssh_host_*key.pub
 
-  # Ключи генерируются здесь, а не на первой загрузке клона: так плата
-  # поднимается с рабочим SSH сразу, без ещё одного цикла перезагрузки.
+  # Keys are generated here rather than on the clone's first boot: that way the
+  # board comes up with working SSH straight away, without another reboot
+  # cycle.
   ssh-keygen -A -f "$mnt" >/dev/null 2>&1 || true
 
   mkdir -p "$(dirname "$mnt$marker")"
@@ -200,16 +263,17 @@ edge_rk3588_provision
 
 def write_bootloader_into_image(raw_path: str, log=print) -> bool:
     """
-    Делает собранный RAW загрузочным для BootROM RK3588.
+    Makes the built RAW image bootable for the RK3588 BootROM.
 
-    Без этого шага образ корректен как файловая система, но плата с него не
-    стартует: в начале носителя нет ни idbloader, ни u-boot. А без стартующей
-    SD не запустится и firstboot, который прошивает SPI -- то есть замкнутый
-    круг, где провижининг не может начаться.
+    Without this step the image is a perfectly valid filesystem, but the board
+    will not start from it: there is neither idbloader nor u-boot at the start
+    of the medium. And without an SD that starts, firstboot -- the thing that
+    flashes SPI -- never runs either: a closed loop in which provisioning can
+    never begin.
 
-    Сами смещения берутся из write_uboot_platform() Armbian, лежащего внутри
-    собранного образа: они зависят от платы и версии загрузчика, и своя копия
-    однажды разошлась бы с апстримом.
+    The offsets themselves come from Armbian's write_uboot_platform(), which
+    lives inside the built image: they depend on the board and on the bootloader
+    version, and a copy of our own would drift from upstream one day.
     """
     import json
     import shutil
@@ -247,8 +311,9 @@ def write_bootloader_into_image(raw_path: str, log=print) -> bool:
                 log(f"[RK3588] Image has no {UBOOT_PLATFORM_SCRIPT} -- the board's U-Boot package is not installed.")
                 return False
 
-            # DIR= внутри скрипта указывает на каталог с бинарниками загрузчика;
-            # имя каталога зависит от платы, поэтому берётся из самого скрипта.
+            # DIR= inside the script points at the directory holding the
+            # bootloader binaries; the directory name depends on the board, so
+            # it is taken from the script itself.
             uboot_dir = None
             for line in open(script_src):
                 if line.startswith("DIR="):
@@ -269,7 +334,7 @@ def write_bootloader_into_image(raw_path: str, log=print) -> bool:
         finally:
             _run(["umount", mnt])
 
-        # Скрипт на bash: [[ ]] и функции dash не осилит.
+        # The script is bash: dash cannot handle its [[ ]] and functions.
         written = _run([
             "bash", "-c",
             'set -e; source "$1"; write_uboot_platform "$2" "$3"',

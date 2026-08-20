@@ -97,6 +97,12 @@ services:
       - frontend-build:/usr/share/nginx/html
     depends_on:
       - backend
+    # The host /etc/resolv.conf injects "search lan"; nginx.conf resolves
+    # backend through its own resolver on every request (see
+    # frontend/nginx.conf), and docker DNS answers for "backend.lan" in a way
+    # nginx cannot parse ("unexpected DNS response"). A dns_search of "." means
+    # "no search domain at all" and drops it.
+    dns_search: "."
 
 volumes:
   pg-data:

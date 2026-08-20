@@ -88,6 +88,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   const [sshKeys, setSshKeys] = useState<string[]>(recipe?.ssh_keys || []);
   const [sshKeyInput, setSshKeyInput] = useState(recipe?.ssh_keys ? recipe.ssh_keys.join('\n') : '');
   const [sshPort, setSshPort] = useState<number>(recipe?.ssh_port ?? 2222);
+  const [sshPasswordAuth, setSshPasswordAuth] = useState<boolean>(recipe?.ssh_password_auth ?? true);
+  const [sshPermitRootLogin, setSshPermitRootLogin] = useState<boolean>(recipe?.ssh_permit_root_login ?? false);
   const [rootPassword, setRootPassword] = useState(recipe?.root_password || '');
   const [users, setUsers] = useState<UserAccount[]>(recipe?.users || []);
   const [rawMkosiConf, setRawMkosiConf] = useState(recipe?.raw_mkosi_conf || '');
@@ -158,6 +160,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
       locale: locale || 'C.UTF-8',
       ssh_keys: parsedKeys,
       ssh_port: sshPort,
+      ssh_password_auth: sshPasswordAuth,
+      ssh_permit_root_login: sshPermitRootLogin,
       root_password: rootPassword.trim() || null,
       users,
       kernel_params: kernelParams.trim() || null,
@@ -467,6 +471,28 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               />
               <p className="text-[11px] text-zinc-500">{t('sshPortHint')}</p>
             </div>
+          </div>
+
+          {/* SSH access: password login and root-by-password */}
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sshPasswordAuth}
+                onChange={(e) => setSshPasswordAuth(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+              />
+              <span className="text-[11px] text-zinc-400 font-medium">{t('sshPasswordAuthHint')}</span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sshPermitRootLogin}
+                onChange={(e) => setSshPermitRootLogin(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+              />
+              <span className="text-[11px] text-zinc-400 font-medium">{t('sshRootLoginHint')}</span>
+            </label>
           </div>
 
           {/* DNS Configuration */}

@@ -64,6 +64,11 @@ class Recipe(Base):
     network_config = Column(JSON, nullable=True)
     ssh_keys = Column(JSON, nullable=False, default=list)
     ssh_port = Column(Integer, nullable=False, default=2222)
+    # Password login is allowed by default: an image with no keys would
+    # otherwise be unreachable. Root password login is the opposite -- closed,
+    # as is customary on Debian/Ubuntu.
+    ssh_password_auth = Column(Boolean, nullable=False, default=True)
+    ssh_permit_root_login = Column(Boolean, nullable=False, default=False)
 
     # Credentials. Passwords may be supplied in plaintext or already hashed
     # (any crypt(3) string, e.g. "$6$..."); they are hashed by chpasswd during

@@ -112,21 +112,40 @@ edge_rk3588_provision() {{
   # The last partition arrived image-sized -- stretch it over the full capacity
   # of the disk. This is the only place the clone is grown: it happens offline,
   # on a target that is not mounted yet, which is why armbian ships no separate
-  # edge-growfs unit. resize2fs comes with the base install (e2fsprogs); as of
-  # Ubuntu 24.04 sfdisk lives in a package of its own, "fdisk" (split out of
-  # util-linux) -- it is in _REQUIRED_PACKAGES/packages.py, but the reminder
-  # stays here in case someone tries to drop it from there as "not obviously
-  # needed". growpart lives in cloud-guest-utils, which is not in the image's
-  # package list at all, so calling it did nothing, silently.
-  local last_part last_num
+  # edge-growfs unit. As of Ubuntu 24.04 sfdisk lives in a package of its own,
+  # "fdisk" (split out of util-linux) -- it is in _REQUIRED_PACKAGES/packages.py,
+  # but the reminder stays here in case someone tries to drop it from there as
+  # "not obviously needed". growpart lives in cloud-guest-utils, which is not in
+  # the image's package list at all, so calling it did nothing, silently.
+  local last_part last_num last_label last_fstype
   last_part="$(lsblk -nrpo NAME,TYPE "$target" 2>/dev/null | awk '$2=="part" {{p=$1}} END {{print p}}')"
   last_num="$(echo "$last_part" | grep -o '[0-9]*$')"
   if [ -n "$last_num" ]; then
+    last_label="$(blkid -o value -s LABEL "$last_part" 2>/dev/null)"
+    last_fstype="$(blkid -o value -s TYPE "$last_part" 2>/dev/null)"
     echo ", +" | sfdisk -N "$last_num" --no-reread --force "$target" >/dev/null 2>&1 || true
     partx -u "$target" >/dev/null 2>&1 || partprobe "$target" >/dev/null 2>&1 || true
     udevadm settle >/dev/null 2>&1 || true
-    e2fsck -fy "$last_part" >/dev/null 2>&1 || true
-    resize2fs "$last_part" >/dev/null 2>&1 || true
+
+    # resize2fs cannot grow this far: it went from ~32 MiB to ~930 GiB, roughly
+    # 29000x, and mkfs reserves only a bounded number of group-descriptor blocks
+    # for future online growth -- nowhere near that ratio. On real hardware this
+    # produced "Corrupt group descriptor: bad block for block bitmap" and a
+    # corrupt journal superblock, caught by e2fsck -fn right after provisioning.
+    # The partition is provably empty at this point (just cloned, nothing but
+    # lost+found), so recreating the filesystem at its final size is both safe
+    # and the only approach whose group-descriptor table is sized correctly for
+    # that size from the start.
+    if [ "$last_fstype" = "ext4" ]; then
+      if [ -n "$last_label" ]; then
+        mkfs.ext4 -q -F -L "$last_label" "$last_part" >/dev/null 2>&1 || true
+      else
+        mkfs.ext4 -q -F "$last_part" >/dev/null 2>&1 || true
+      fi
+    else
+      e2fsck -fy "$last_part" >/dev/null 2>&1 || true
+      resize2fs "$last_part" >/dev/null 2>&1 || true
+    fi
   fi
 
   # A truncated copy would leave the board with SPI flashed but no root: the
@@ -206,15 +225,30 @@ edge_rk3588_write_spi() {{
     echo "[PROVISION] $script not found -- SPI flashing skipped, do not remove the card."
     return 0
   fi
-  if [ ! -e /dev/mtdblock0 ]; then
-    echo "[PROVISION] SPI (/dev/mtdblock0) not found -- skipping."
+  if [ ! -e /dev/mtdblock0 ] && [ ! -e /dev/mtd0 ]; then
+    echo "[PROVISION] SPI (/dev/mtd0) not found -- skipping."
     return 0
   fi
 
   # shellcheck source=/dev/null
   . "$script"
   echo "[PROVISION] Writing bootloader to SPI ..."
-  write_uboot_platform_mtd "$DIR" /dev/mtdblock0
+  # Armbian's own write_uboot_platform_mtd() writes rkspi_loader.img via
+  # plain "dd ... of=/dev/mtdblock0" -- the block-device compatibility
+  # layer, which was timed at 4+ minutes for this 16 MB image on real
+  # hardware (single erase-block-sized cache, no native MTD ioctls).
+  # flashcp writes the exact same bytes to the exact same chip through
+  # /dev/mtd0's native MEMERASE/MEMWRITE ioctls instead, which is
+  # dramatically faster -- this changes only the write mechanism, not any
+  # bootloader offset, so it does not touch the "don't reimplement
+  # Armbian's own layout knowledge" boundary this function otherwise keeps.
+  # Falls back to Armbian's own function if flashcp or the image is missing.
+  local spi_img="$DIR/rkspi_loader.img"
+  if [ -f "$spi_img" ] && [ -e /dev/mtd0 ] && command -v flashcp >/dev/null 2>&1; then
+    flashcp -v -p "$spi_img" /dev/mtd0
+  else
+    write_uboot_platform_mtd "$DIR" /dev/mtdblock0
+  fi
   sync
 }}
 

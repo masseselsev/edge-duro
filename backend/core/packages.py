@@ -60,10 +60,18 @@ ALWAYS_EDGE_PACKAGES = ("edge-base", "edge-python3-core")
 # Without the package the command fails silently ("command not found" under
 # "|| true") -- the partition never grows, while neither the build nor the
 # provisioning run reports anything wrong.
+# "gpgv" -- apt needs it to verify a repo's Release signature. Without it, any
+# chroot apt-get against a signed repo (custom repositories, and previously
+# the now-removed linux-firmware fetch) fails with "gpgv, gpgv2 or gpgv1
+# required for verification, but neither seems installed" regardless of
+# --allow-insecure-repositories -- that flag governs trusting an unsigned
+# repo, not the absence of the verifier binary itself. Caught live in a
+# build log: the custom-repo apt-get update wrapped in "|| true" was silently
+# failing on every build that used one.
 _REQUIRED_PACKAGES = (
     "apt", "bash", "coreutils", "login", "sudo",
     "systemd-boot", "systemd-sysv", "initramfs-tools", "zstd", "openssh-server",
-    "fdisk",
+    "fdisk", "gpgv",
 )
 
 # Armbian публикует репозиторий и под Debian-, и под Ubuntu-суиты; по release
@@ -261,6 +269,17 @@ def resolve_package_list(recipe, exclude=frozenset()) -> Tuple[List[str], List[s
     for board_pkg in board_packages(recipe.distribution, board):
         if board_pkg not in pkgs:
             pkgs.append(board_pkg)
+
+    # "mtd-utils" -- provides flashcp, used by edge_rk3588_write_spi() in
+    # rk3588.py to write the SPI bootloader through the raw MTD device.
+    # Armbian's own platform_install.sh writes rkspi_loader.img via plain dd
+    # to /dev/mtdblock0 (the block-device compatibility layer), which was
+    # timed at 4+ minutes for a 16 MB image on real hardware; flashcp uses
+    # the native MEMERASE/MEMWRITE ioctls instead and is dramatically
+    # faster. Every current and planned armbian board targets RK3588, which
+    # always carries SPI-NOR, so this is armbian-wide rather than per-board.
+    if is_armbian(recipe.distribution) and "mtd-utils" not in pkgs:
+        pkgs.append("mtd-utils")
 
     edge_pkgs = [p for p in pkgs if p.lower().startswith("edge-")]
     for always in ALWAYS_EDGE_PACKAGES:

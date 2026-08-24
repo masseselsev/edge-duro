@@ -133,6 +133,91 @@ def test_extlinux_append_carries_the_boards_console(tmp_path):
     assert "console=ttyS0,115200" not in postinst
 
 
+def test_board_specific_firmware_is_gated_on_the_exact_board(tmp_path, monkeypatch):
+    """
+    r8169 cannot bring the on-board 2.5GbE NICs up at full capability without
+    rtl_nic/rtl8125b-2.fw ("Unable to load firmware", seen live on hardware).
+    That fix is specific to the Orange Pi 5 Plus's own silicon and has no
+    business running on a different RK3588 board that may not even carry the
+    same NIC -- gating on is_armbian() alone would have shipped it everywhere.
+
+    Fetched directly from upstream (a 3 KB file) rather than through apt's
+    ~655 MB linux-firmware package -- see _fetch_opi5_plus_firmware in
+    core/workspace.py for why the apt route was abandoned. The real network
+    call is replaced here so the test doesn't depend on it succeeding.
+    """
+    import os
+    from unittest.mock import MagicMock, patch
+
+    from core.workspace import populate_extra_tree
+
+    # Isolate the shared fwcache dir so this test never reads (or pollutes)
+    # a real cached copy from an actual build.
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    fake_firmware = b"\x00\x00\x00\x00fake-firmware-blob"
+
+    def fake_urlopen(req, timeout=15):
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.read.return_value = fake_firmware
+        return cm
+
+    with patch("core.workspace.urllib.request.urlopen", side_effect=fake_urlopen):
+        ws = str(tmp_path / "opi5")
+        os.makedirs(ws, exist_ok=True)
+        populate_extra_tree(_armbian_recipe(board="opi5-plus"), [], ws)
+        fw_path = os.path.join(ws, "mkosi.extra", "lib", "firmware", "rtl_nic", "rtl8125b-2.fw")
+        assert os.path.exists(fw_path)
+        with open(fw_path, "rb") as f:
+            assert f.read() == fake_firmware
+
+        ws2 = str(tmp_path / "other-board")
+        os.makedirs(ws2, exist_ok=True)
+        populate_extra_tree(_armbian_recipe(board="nanopc-t6-lts"), [], ws2)
+        fw_path2 = os.path.join(ws2, "mkosi.extra", "lib", "firmware", "rtl_nic", "rtl8125b-2.fw")
+        assert not os.path.exists(fw_path2)
+
+
+def test_etc_hosts_is_written_at_build_time(tmp_path):
+    """
+    A minimal mkosi image ships no /etc/hosts at all -- that convention comes
+    from debian-installer, not from the base packages. Without it, nothing
+    resolves the hostname to localhost, and every "sudo" invocation on the
+    board prints "unable to resolve host <name>": harmless, but on every
+    single command. Caught live on real hardware, not in a test.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(hostname="edge-node"), [], ws)
+    hosts = open(os.path.join(ws, "mkosi.extra", "etc", "hosts")).read()
+    assert "127.0.0.1\tlocalhost" in hosts
+    assert "127.0.1.1\tedge-node" in hosts
+
+
+def test_live_hostname_rewrite_creates_hosts_if_missing(tmp_path):
+    """
+    hostname_from_netif overwrites the hostname again at runtime once the
+    MAC-derived name is known, and the original code only ever "sed -i"d an
+    EXISTING /etc/hosts -- a no-op on an image that ships none, which is the
+    normal case (see test_etc_hosts_is_written_at_build_time above).
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(hostname_from_netif=True, network_config=None), [], ws)
+    script = open(os.path.join(ws, "mkosi.extra", "opt", "edge", "bin", "firstboot.sh")).read()
+
+    assert "if [ ! -f /etc/hosts ]; then" in script
+    assert "printf '127.0.0.1\\tlocalhost\\n127.0.1.1\\t%s\\n' \"$MAC\" > /etc/hosts" in script
+    assert "elif grep -q '^127\\.0\\.1\\.1' /etc/hosts" in script
+    assert "printf '127.0.1.1\\t%s\\n' \"$MAC\" >> /etc/hosts" in script
+
+
 def test_provision_refuses_a_target_smaller_than_the_data():
     # Оборванный на середине dd оставил бы цель незагружаемой. Сравнивается
     # именно объём данных, а не физический размер карты: NVMe меньше карты, но
@@ -221,6 +306,27 @@ def test_result_is_announced_on_the_active_console():
     assert "NVMe provisioned OK" in script
 
 
+def test_last_partition_is_reformatted_not_resized():
+    """
+    resize2fs cannot grow this far: from a ~32 MiB clone to a ~930 GB disk is
+    roughly 29000x, far past what mkfs reserves group-descriptor blocks for.
+    On real hardware this produced "Corrupt group descriptor: bad block for
+    block bitmap" and a corrupt journal superblock, caught by `e2fsck -fn`
+    right after provisioning. The partition is empty at this point (just
+    cloned), so mkfs at the final size sidesteps the whole reservation limit.
+    """
+    script = provision_script()
+    assert "mkfs.ext4" in script
+    assert '-L "$last_label"' in script
+
+    # The ext4 branch must not also fall through to resize2fs.
+    ext4_at = script.index('if [ "$last_fstype" = "ext4" ]; then')
+    fallback_at = script.index('else\n      e2fsck -fy "$last_part"')
+    assert ext4_at < fallback_at
+    assert "resize2fs" not in script[ext4_at:fallback_at]
+    assert "resize2fs" in script[fallback_at:]
+
+
 def test_provision_rebuilds_the_backup_gpt_on_the_target():
     """
     Копия обрывается на конце последнего раздела, а резервный заголовок GPT
@@ -261,6 +367,28 @@ def test_fdisk_package_ships_sfdisk_for_growfs():
                     board="opi5-plus", packages=[])
     )
     assert "fdisk" in std
+
+
+def test_mtd_utils_ships_flashcp_for_spi_writes():
+    """
+    edge_rk3588_write_spi() (rk3588.py) prefers flashcp over Armbian's own
+    dd-based write_uboot_platform_mtd() -- dd through /dev/mtdblock0 was
+    timed at 4+ minutes for the 16 MB SPI image on real hardware, flashcp's
+    native MTD ioctls at a fraction of that. Without the "mtd-utils" package,
+    "command -v flashcp" fails and the code silently falls back to the slow
+    path on every build.
+    """
+    std, _ = resolve_package_list(
+        make_recipe(distribution="armbian", release="noble", architecture="arm64",
+                    board="opi5-plus", packages=[])
+    )
+    assert "mtd-utils" in std
+
+    std_other, _ = resolve_package_list(
+        make_recipe(distribution="debian", release="bookworm", architecture="amd64",
+                    board="generic", packages=[])
+    )
+    assert "mtd-utils" not in std_other
 
 
 def test_card_partitions_never_grow(tmp_path):
@@ -370,6 +498,24 @@ def test_provision_writes_the_loader_via_armbians_own_script():
     assert "/usr/lib/u-boot/platform_install.sh" in script
     assert "write_uboot_platform_mtd" in script
     assert "/dev/mtdblock0" in script
+
+
+def test_spi_write_prefers_flashcp_but_falls_back_to_armbians_dd():
+    """
+    flashcp writes through /dev/mtd0's native MTD ioctls instead of Armbian's
+    own dd-based write_uboot_platform_mtd() (which goes through the
+    block-device compatibility layer at /dev/mtdblock0 and was timed at 4+
+    minutes for this 16 MB image on real hardware) -- same bootloader bytes,
+    same chip, only the write mechanism differs. write_uboot_platform_mtd()
+    must still be reachable as a fallback for whenever flashcp or the image
+    file itself is not available, so the board never ends up with no way to
+    write SPI at all.
+    """
+    script = provision_script()
+    flashcp_at = script.index("flashcp -v -p")
+    fallback_at = script.index('write_uboot_platform_mtd "$DIR" /dev/mtdblock0')
+    assert flashcp_at < fallback_at
+    assert "command -v flashcp" in script
 
 
 def test_interface_rename_binds_to_mac_not_kernel_name():
@@ -562,6 +708,52 @@ def test_armbian_repo_reaches_the_package_manager_sandbox(tmp_path):
     # В образе он тоже нужен -- ради apt update на самой плате.
     image = os.path.join(ws, "mkosi.extra", "etc", "apt", "sources.list.d", "custom.list")
     assert "apt.armbian.com" in open(image).read()
+
+
+def test_sandbox_trusted_gpg_d_exists_for_the_early_metadata_sync(tmp_path):
+    """
+    mkosi's "Syncing package manager metadata" step runs apt-get against
+    mkosi.sandbox before mkosi.skeleton is even copied in -- a
+    mkosi.skeleton copy of this directory (added for mkosi.prepare's own
+    later apt-get update) is too late for this specific sync. Without it:
+    "W: OpenPGP signature verification failed: ... List of files can't be
+    created as '/etc/apt/trusted.gpg.d/' is not a directory", on every build.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+
+    assert os.path.isdir(os.path.join(ws, "mkosi.sandbox", "etc", "apt", "trusted.gpg.d"))
+
+
+def test_prepare_script_mounts_devfs_before_chrooting_for_apt_update(tmp_path):
+    """
+    Real failure: mkosi.prepare's "chroot $ROOT apt-get update" had no /proc,
+    /sys or /dev mounted inside $ROOT first, so /dev/null did not exist in
+    the chroot. apt-key (invoked internally by apt-get update against a
+    Signed-By: source) then failed with "cannot create /dev/null: Permission
+    denied", cascading into "gpgv, gpgv2 or gpgv1 required for verification"
+    even with gpgv itself installed. The postinst edge-packages chroot
+    already mounts these three before its own chroot calls -- mirror that.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(repositories=[
+        {"url": "http://example.invalid/repo", "components": "main"}
+    ]), [], ws)
+    script = open(os.path.join(ws, "mkosi.prepare")).read()
+
+    chroot_at = script.index('chroot "$ROOT" apt-get update')
+    before = script[:chroot_at]
+    assert 'mount -t proc proc "$ROOT/proc"' in before
+    assert 'mount -t sysfs sys "$ROOT/sys"' in before
+    assert 'mount --bind /dev "$ROOT/dev"' in before
 
 
 def test_initramfs_conf_exists_before_packages_are_installed(tmp_path):

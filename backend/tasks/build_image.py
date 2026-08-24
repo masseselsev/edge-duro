@@ -370,7 +370,9 @@ def build_image_task(self, build_id: str, recipe_id: int):
 
         recipe.last_build_status = "SUCCESS"
         if build.missing_packages:
-            log_to_task(build_id, f"[ARCH CHECK] Image built without {len(build.missing_packages)} package(s) unavailable for {recipe.architecture}.")
+            log_to_task(build_id, f"[ARCH CHECK] Image built without {len(build.missing_packages)} package(s) unavailable for {recipe.architecture}:")
+            for m in build.missing_packages:
+                log_to_task(build_id, f"[ARCH CHECK]   - {m['name']} ({m['source']})")
         db.commit()
 
         log_to_task(build_id, f"Build completed successfully in {duration}s! RAW.XZ Artifact: {raw_xz_filename} ({artifact_size} bytes)", status="SUCCESS")

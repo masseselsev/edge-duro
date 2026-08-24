@@ -27,6 +27,19 @@ def test_required_and_dracut_always_present():
         assert required in std
 
 
+def test_gpgv_always_present_for_repo_signature_checks():
+    """
+    Without gpgv, any chroot apt-get against a signed repo fails with "gpgv,
+    gpgv2 or gpgv1 required for verification, but neither seems installed" --
+    --allow-insecure-repositories does not help, it governs trusting an
+    unsigned repo, not the absence of the verifier binary. Caught live: the
+    custom-repo apt-get update (wrapped in "|| true") was silently failing on
+    every build that configured one.
+    """
+    std, _ = resolve_package_list(make_recipe())
+    assert "gpgv" in std
+
+
 def test_edge_packages_split_out_and_core_added():
     std, edge = resolve_package_list(
         make_recipe(packages=["nginx-full", "edge-target-puma"])

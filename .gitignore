@@ -39,7 +39,7 @@ docker-data/
 GEMINI.md
 AGENTS.md
 CLAUDE.md
-.claude/settings.local.json
+.claude/
 
 # Superpowers
 .superpowers/

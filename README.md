@@ -25,6 +25,14 @@ Every dependency has a ceiling, and the same commit resolves to the same version
 
 > TypeScript is deliberately held at 6.x: `typescript-eslint` does not support TypeScript 7 yet and refuses to load against it, and a toolchain that cannot lint is a worse trade than a compiler one major behind. Revisit when the plugin catches up.
 
+### Database migrations
+
+`entrypoint.sh` runs `alembic upgrade head` before the API starts, and the migrations in `backend/alembic/versions/` are the source of truth for schema changes.
+
+Every schema operation goes through the guarded helpers in `backend/migration_utils.py` (`add_column_if_missing`, `create_table_if_missing`, …) rather than calling `op.*` directly. Alembic had been failing silently since the second revision — its version table caps identifiers at 32 characters and two of ours were longer, so `upgrade head` crashed on every start and the schema was actually being maintained by `create_all` plus a safety pass in `main.py`. Databases were therefore left far behind the chain, and the first upgrade that finally worked would have replayed every migration against a schema that already had all of it. State-checked operations make that replay a no-op on an existing database while an empty one is still built from scratch, so no deployment needs stamping by hand.
+
+Both properties are enforced by `backend/tests/test_migrations.py`: revision identifiers must fit the version table, the chain must stay linear with a single head, and no migration may call `op.*` directly.
+
 ---
 
 ## ✨ Recent Updates & Key System Features

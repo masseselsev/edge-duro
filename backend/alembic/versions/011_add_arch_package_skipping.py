@@ -6,8 +6,12 @@ Create Date: 2026-08-03 12:00:00.000000
 
 """
 from typing import Sequence, Union
-from alembic import op
 import sqlalchemy as sa
+
+from migration_utils import (
+    add_column_if_missing,
+    drop_column_if_exists,
+)
 
 
 revision: str = '011_add_arch_package_skipping'
@@ -17,16 +21,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
+    add_column_if_missing(
         'recipes',
         sa.Column('ignore_missing_arch_packages', sa.Boolean(), nullable=False, server_default=sa.false()),
     )
-    op.add_column(
+    add_column_if_missing(
         'builds',
         sa.Column('missing_packages', sa.JSON(), nullable=False, server_default='[]'),
     )
 
 
 def downgrade() -> None:
-    op.drop_column('builds', 'missing_packages')
-    op.drop_column('recipes', 'ignore_missing_arch_packages')
+    drop_column_if_exists('builds', 'missing_packages')
+    drop_column_if_exists('recipes', 'ignore_missing_arch_packages')

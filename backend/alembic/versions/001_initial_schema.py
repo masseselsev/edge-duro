@@ -6,8 +6,13 @@ Create Date: 2026-07-23 20:30:00.000000
 
 """
 from typing import Sequence, Union
-from alembic import op
 import sqlalchemy as sa
+
+from migration_utils import (
+    create_index_if_missing,
+    create_table_if_missing,
+    drop_table_if_exists,
+)
 
 
 # revision identifiers, used by Alembic.
@@ -19,7 +24,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # 1. settings
-    op.create_table(
+    create_table_if_missing(
         'settings',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('server_name', sa.String(), nullable=False, server_default='Edge-D.U.R.O.'),
@@ -29,7 +34,7 @@ def upgrade() -> None:
     )
 
     # 2. users
-    op.create_table(
+    create_table_if_missing(
         'users',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('username', sa.String(), nullable=False, unique=True),
@@ -41,10 +46,10 @@ def upgrade() -> None:
         sa.Column('is_superadmin', sa.Boolean(), nullable=False, server_default=sa.text('false')),
         sa.Column('is_admin_plus', sa.Boolean(), nullable=False, server_default=sa.text('false'))
     )
-    op.create_index('ix_users_username', 'users', ['username'], unique=True)
+    create_index_if_missing('ix_users_username', 'users', ['username'], unique=True)
 
     # 3. recipes
-    op.create_table(
+    create_table_if_missing(
         'recipes',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('name', sa.String(), nullable=False, unique=True),
@@ -66,10 +71,10 @@ def upgrade() -> None:
         sa.Column('last_build_at', sa.DateTime(), nullable=True),
         sa.Column('last_build_status', sa.String(), nullable=True)
     )
-    op.create_index('ix_recipes_name', 'recipes', ['name'], unique=True)
+    create_index_if_missing('ix_recipes_name', 'recipes', ['name'], unique=True)
 
     # 4. builds
-    op.create_table(
+    create_table_if_missing(
         'builds',
         sa.Column('id', sa.String(), nullable=False, primary_key=True),
         sa.Column('recipe_id', sa.Integer(), sa.ForeignKey('recipes.id', ondelete='CASCADE'), nullable=False),
@@ -86,7 +91,7 @@ def upgrade() -> None:
     )
 
     # 5. recipe_assets
-    op.create_table(
+    create_table_if_missing(
         'recipe_assets',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('recipe_id', sa.Integer(), sa.ForeignKey('recipes.id', ondelete='CASCADE'), nullable=False),
@@ -100,7 +105,7 @@ def upgrade() -> None:
     )
 
     # 6. system_logs
-    op.create_table(
+    create_table_if_missing(
         'system_logs',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('level', sa.String(), nullable=False),
@@ -109,7 +114,7 @@ def upgrade() -> None:
     )
 
     # 7. audit_logs
-    op.create_table(
+    create_table_if_missing(
         'audit_logs',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('username', sa.String(), nullable=False),
@@ -118,14 +123,14 @@ def upgrade() -> None:
         sa.Column('ip_address', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now())
     )
-    op.create_index('ix_audit_logs_username', 'audit_logs', ['username'])
+    create_index_if_missing('ix_audit_logs_username', 'audit_logs', ['username'])
 
 
 def downgrade() -> None:
-    op.drop_table('audit_logs')
-    op.drop_table('system_logs')
-    op.drop_table('recipe_assets')
-    op.drop_table('builds')
-    op.drop_table('recipes')
-    op.drop_table('users')
-    op.drop_table('settings')
+    drop_table_if_exists('audit_logs')
+    drop_table_if_exists('system_logs')
+    drop_table_if_exists('recipe_assets')
+    drop_table_if_exists('builds')
+    drop_table_if_exists('recipes')
+    drop_table_if_exists('users')
+    drop_table_if_exists('settings')

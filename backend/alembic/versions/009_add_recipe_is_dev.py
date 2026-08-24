@@ -6,8 +6,12 @@ Create Date: 2026-07-31 10:00:00.000000
 
 """
 from typing import Sequence, Union
-from alembic import op
 import sqlalchemy as sa
+
+from migration_utils import (
+    add_column_if_missing,
+    drop_column_if_exists,
+)
 
 
 revision: str = '009_add_recipe_is_dev'
@@ -17,8 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('recipes', sa.Column('is_dev', sa.Boolean(), nullable=False, server_default=sa.text('false')))
+    add_column_if_missing('recipes', sa.Column('is_dev', sa.Boolean(), nullable=False, server_default=sa.text('false')))
 
 
 def downgrade() -> None:
-    op.drop_column('recipes', 'is_dev')
+    drop_column_if_exists('recipes', 'is_dev')

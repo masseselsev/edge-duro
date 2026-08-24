@@ -4,10 +4,18 @@ import shlex
 import shutil
 import urllib.error
 import urllib.request
-from typing import List
+from typing import Dict, List, Tuple
 from models import Recipe, RecipeAsset
 from core.netnames import DEFAULT_START_INDEX, STAMP_PATH as NETNAMES_STAMP, rename_script
-from core.packages import ARMBIAN_REPO_URL, armbian_source_line, board_console, board_dtb, board_key, is_armbian
+from core.packages import (
+    ARMBIAN_KEYRING_PATH,
+    ARMBIAN_REPO_URL,
+    armbian_source_line,
+    board_console,
+    board_dtb,
+    board_key,
+    is_armbian,
+)
 from core.rk3588 import provision_script
 
 # Static fallback so glibc getaddrinfo resolves DNS before networkd/DHCP has
@@ -25,46 +33,96 @@ FALLBACK_RESOLV_CONF = (
     "nameserver 1.1.1.1\n"
 )
 
-# r8169 cannot bring the Orange Pi 5 Plus's on-board 2.5GbE NICs up at full
-# capability without this file ("Unable to load firmware", seen live on
-# hardware) -- link still comes up, just degraded. Ubuntu only ships it
-# inside the ~655 MB "linux-firmware" package; fetching that whole .deb
-# during postinst (even with a persistent apt cache) proved too slow and
-# unreliable on this network -- one build spent 2.5 minutes before a mirror
-# reset the connection. gitlab.com is the canonical upstream project for
-# this exact file and serves it directly, so it is fetched once here (at
+# Firmware blobs a board's drivers ask for by name and that neither Debian nor
+# Ubuntu ships outside the ~655 MB "linux-firmware" package. Fetching that
+# whole .deb during postinst (even with a persistent apt cache) proved too
+# slow and unreliable on this network -- one build spent 2.5 minutes before a
+# mirror reset the connection. gitlab.com is the canonical upstream project
+# for these exact files and serves them directly, so they are fetched here (at
 # prepare time, in Python, with real internet access) instead of through
 # apt/dpkg in the build chroot. git.kernel.org mirrors the same repo but was
 # tested and rejected: it returns 403 to Python's default urllib UA and an
-# HTML challenge page (still HTTP 200) to a browser-like one, either of
-# which would silently ship as "firmware" without the b"\\x00\\x00\\x00\\x00"
-# binary-header check below.
-_OPI5_PLUS_FIRMWARE_URL = "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main/rtl_nic/rtl8125b-2.fw"
+# HTML challenge page (still HTTP 200) to a browser-like one, either of which
+# would silently ship as "firmware" without the per-file magic check below.
+#
+#   rtl_nic/rtl8125b-2.fw -- r8169 cannot bring the on-board 2.5GbE NICs up at
+#     full capability without it ("Unable to load firmware", seen live on
+#     hardware); the link still comes up, just degraded.
+#   rockchip/dptx.bin -- the DisplayPort controller the rockchipdrm driver
+#     drives for the board's two USB-C DP outputs. update-initramfs flagged it
+#     on every build ("Possible missing firmware ... for built-in driver
+#     rockchipdrm"); without it those outputs stay dark.
+_FIRMWARE_BASE_URL = "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main/"
+
+# board -> ((path under /lib/firmware, first bytes of a genuine file), ...)
+_BOARD_FIRMWARE: Dict[str, Tuple[Tuple[str, bytes], ...]] = {
+    "opi5-plus": (
+        ("rtl_nic/rtl8125b-2.fw", b"\x00\x00\x00\x00"),
+        ("rockchip/dptx.bin", b"\x10\x80\x01\x00"),
+    ),
+}
 
 
-def _fetch_opi5_plus_firmware(extra_dir: str) -> None:
-    dest = os.path.join(extra_dir, "lib", "firmware", "rtl_nic", "rtl8125b-2.fw")
+def _fetch_board_firmware(workspace_path: str, board: str) -> None:
+    # Both trees, on purpose. mkosi.skeleton is copied in before packages are
+    # installed, so update-initramfs -- which the kernel package triggers
+    # during its own configuration, long before extra trees exist -- can see
+    # the blobs; with only mkosi.extra it still reported "Possible missing
+    # firmware ... for built-in driver" and built an initrd without them.
+    # mkosi.extra is copied in last and is what guarantees the files survive
+    # into the finished image whatever the packages did in between.
+    # skeleton uses usr/lib/ rather than lib/: it lands before the base system
+    # exists, and creating a real /lib directory there would shadow the
+    # merged-usr symlink the distro expects.
+    dests = [
+        os.path.join(workspace_path, "mkosi.skeleton", "usr", "lib", "firmware"),
+        os.path.join(workspace_path, "mkosi.extra", "lib", "firmware"),
+    ]
+    wanted = dict(_BOARD_FIRMWARE.get(board, ()))
+
+    # Workspaces are reused. A recipe retargeted at another board (or off
+    # armbian entirely) would otherwise keep shipping the previous board's
+    # blobs, which is how a "generic" image ends up carrying firmware for
+    # silicon it does not have.
+    for entries in _BOARD_FIRMWARE.values():
+        for rel_path, _magic in entries:
+            if rel_path in wanted:
+                continue
+            for fw_root in dests:
+                stale = os.path.join(fw_root, *rel_path.split("/"))
+                if os.path.exists(stale):
+                    os.remove(stale)
+
+    for rel_path, magic in wanted.items():
+        for fw_root in dests:
+            _fetch_firmware_file(fw_root, rel_path, magic)
+
+
+def _fetch_firmware_file(firmware_dir: str, rel_path: str, magic: bytes) -> None:
+    dest = os.path.join(firmware_dir, *rel_path.split("/"))
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
         return
 
+    name = rel_path.rsplit("/", 1)[-1]
+
     # Shared across every recipe/build (not the per-recipe workspace_path),
-    # same convention as PackageCacheDirectory in mkosi_config.py -- this
-    # 3 KB file never changes per-recipe, so there is no reason to refetch it
+    # same convention as PackageCacheDirectory in mkosi_config.py -- these
+    # files never change per-recipe, so there is no reason to refetch one
     # once any build has already pulled a copy.
     cache_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "fwcache")
-    cached = os.path.join(cache_dir, "rtl8125b-2.fw")
+    cached = os.path.join(cache_dir, name)
+    url = _FIRMWARE_BASE_URL + rel_path
 
     if not (os.path.exists(cached) and os.path.getsize(cached) > 0):
         try:
-            req = urllib.request.Request(_OPI5_PLUS_FIRMWARE_URL)
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as resp:
                 data = resp.read()
         except (urllib.error.URLError, OSError) as exc:
-            print(f"[WARNING] Could not fetch rtl8125b-2.fw from {_OPI5_PLUS_FIRMWARE_URL}: {exc}")
+            print(f"[WARNING] Could not fetch {name} from {url}: {exc}")
             return
 
-        if not data.startswith(b"\x00\x00\x00\x00"):
-            print("[WARNING] rtl8125b-2.fw download did not look like firmware (wrong content, possibly an HTML error page) -- discarded")
+        if not data.startswith(magic):
+            print(f"[WARNING] {name} download did not look like firmware (wrong content, possibly an HTML error page) -- discarded")
             return
 
         os.makedirs(cache_dir, exist_ok=True)
@@ -73,6 +131,78 @@ def _fetch_opi5_plus_firmware(extra_dir: str) -> None:
 
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     shutil.copy2(cached, dest)
+
+
+# apt.armbian.com signs its indices, but nothing shipped the public key, so
+# every apt that saw the repo -- mkosi's own, the build chroot's, and the one
+# on the finished board -- reported "The signatures couldn't be verified
+# because no keyring is specified" and only proceeded thanks to [trusted=yes].
+# The key is armoured ASCII; apt reads .asc from trusted.gpg.d as-is, so there
+# is no gpg --dearmor step here.
+# The RK3588 flow clones the card to NVMe with dd, and dd copies every
+# identifier a filesystem or a partition table carries: the label, the
+# filesystem UUID and the PARTUUID come out identical on both media. Verified
+# on hardware after a provisioning run -- all three matched byte for byte. So
+# "root=LABEL=edgeroot" has two answers on a provisioned board, and the kernel
+# takes whichever blkid returns first: a freshly written test card booted the
+# installed system instead of itself, looking for all the world like the build
+# had shipped stale content.
+#
+# The way out is for each medium to name a root nothing else can answer to.
+# The image gets this fixed PARTUUID (pinned in the repart config so it is
+# known while the loader entry is being written), and provisioning hands the
+# clone a fresh random one plus a matching loader entry -- see
+# edge_rk3588_reidentify in core/rk3588.py. Labels are left exactly as they
+# are: the platform on the installed system depends on them.
+IMAGE_ROOT_PARTUUID = "ed9e0001-0000-4000-8000-000000000001"
+
+_ARMBIAN_KEY_URL = "https://apt.armbian.com/armbian.key"
+_ARMBIAN_KEY_HEADER = b"-----BEGIN PGP PUBLIC KEY BLOCK-----"
+
+
+def install_armbian_key(workspace_path: str) -> bool:
+    """
+    Places the Armbian repo signing key into every apt tree of the workspace.
+
+    Returns True when the key is in place, so callers can emit a signed-by=
+    source line; False leaves them on the [trusted=yes] fallback. A build must
+    never fail just because this fetch did not go through.
+    """
+    trees = ["mkosi.sandbox", "mkosi.skeleton", "mkosi.extra"]
+    dests = [
+        os.path.join(workspace_path, t, "etc", "apt", "trusted.gpg.d", "armbian.asc")
+        for t in trees
+    ]
+
+    cache_dir = os.path.join(os.getenv("DURO_WORKSPACE_PATH", "/opt/data/duro_workspace"), "fwcache")
+    cached = os.path.join(cache_dir, "armbian.asc")
+
+    if not (os.path.exists(cached) and os.path.getsize(cached) > 0):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(_ARMBIAN_KEY_URL), timeout=15) as resp:
+                data = resp.read()
+        except (urllib.error.URLError, OSError) as exc:
+            print(f"[WARNING] Could not fetch the Armbian repo key from {_ARMBIAN_KEY_URL}: {exc}")
+            return False
+
+        if not data.startswith(_ARMBIAN_KEY_HEADER):
+            print("[WARNING] Armbian repo key download was not an armoured PGP key -- discarded")
+            return False
+
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(cached, "wb") as f:
+            f.write(data)
+
+    for dest in dests:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(cached, dest)
+    return True
+
+
+def armbian_key_installed(workspace_path: str) -> bool:
+    """Whether install_armbian_key() has already put the key in this workspace."""
+    key = os.path.join(workspace_path, "mkosi.extra", "etc", "apt", "trusted.gpg.d", "armbian.asc")
+    return os.path.exists(key) and os.path.getsize(key) > 0
 
 
 def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
@@ -180,6 +310,12 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
             # столько же потом ехало по dd на NVMe. Тот же Minimize=guess стоит
             # в дефолтной разметке самого mkosi.
             lines.append("Minimize=guess")
+            # Pinned so postinst can name it on the kernel command line: the
+            # PARTUUID repart would otherwise assign is only known after the
+            # image is assembled, long after the loader entry is written.
+            # See IMAGE_ROOT_PARTUUID for why the boot has to key on it.
+            if recipe and is_armbian(recipe.distribution):
+                lines.append(f"UUID={IMAGE_ROOT_PARTUUID}")
         elif p_type == "swap":
             lines.append("Type=swap")
             lines.append("Format=swap")
@@ -188,6 +324,16 @@ def prepare_workspace(recipe_id: int, recipe: Recipe = None) -> str:
             lines.append(f"Format={p_fs}")
             if p_mount and p_mount != "/":
                 lines.append(f"CopyFiles={p_mount}")
+                # The directory has to exist in the rootfs for two reasons:
+                # repart reads it as the CopyFiles= source and otherwise logs
+                # "Failed to open source file '/buildroot/...', skipping", and
+                # the same path is the fstab mount point on the running board.
+                # Nothing else in the build creates it -- for a recipe whose
+                # packages never touch /var/opt/edge it simply was not there.
+                os.makedirs(
+                    os.path.join(recipe_ws, "mkosi.extra", p_mount.lstrip("/")),
+                    exist_ok=True,
+                )
 
         if p_label:
             lines.append(f"Label={p_label}")
@@ -307,6 +453,26 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     net_dir = os.path.join(extra_dir, "etc", "systemd", "network")
     os.makedirs(net_dir, exist_ok=True)
 
+    # systemd-networkd-wait-online waits for EVERY managed link by default. The
+    # board has two on-board NICs and normally only one is patched, so the
+    # service sat in "activating" until its 120 s timeout on every single boot,
+    # holding network-online.target down with it -- and with it everything
+    # ordered after that target. Measured on hardware: edge-firstboot.service
+    # (hostname, interface naming, and the NVMe clone, none of which need the
+    # network at all) did not start until two minutes into the boot. --any
+    # releases the target as soon as one link is up, which is the condition
+    # that actually matters here.
+    wait_online_dir = os.path.join(
+        extra_dir, "etc", "systemd", "system", "systemd-networkd-wait-online.service.d"
+    )
+    os.makedirs(wait_online_dir, exist_ok=True)
+    with open(os.path.join(wait_online_dir, "10-edge-any-interface.conf"), "w") as f:
+        f.write(
+            "[Service]\n"
+            "ExecStart=\n"
+            "ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any\n"
+        )
+
     net_cfg = recipe.network_config if isinstance(recipe.network_config, dict) else {}
 
     # Interfaces are renamed to <prefix>N on the running system, and "en*"
@@ -369,8 +535,10 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     # is_armbian() alone: a fix for one board's silicon has no reason to
     # apply to a different RK3588 board that may not even carry the same
     # chip. See the "hardware-board-fixes" skill for the pattern this follows.
-    if is_armbian(recipe.distribution) and board_key(getattr(recipe, "board", None)) == "opi5-plus":
-        _fetch_opi5_plus_firmware(extra_dir)
+    _fetch_board_firmware(
+        workspace_path,
+        board_key(getattr(recipe, "board", None)) if is_armbian(recipe.distribution) else "",
+    )
 
     # 2. Custom APT Repositories (Populated into both mkosi.skeleton and mkosi.extra)
     rel = recipe.release or "bookworm"
@@ -387,6 +555,7 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
                 suite = repo.get("suite") or rel
                 comp = repo.get("components") or "main"
                 repo_lines.append(f"deb [trusted=yes] {url} {suite} {comp}")
+    user_repo_lines = list(repo_lines)
 
     # Ядро, DTB и U-Boot платы живут только в репозитории Armbian, и apt должен
     # видеть его ещё во время сборки. Для этого годится только mkosi.sandbox:
@@ -440,8 +609,9 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
     sandbox_armbian = os.path.join(sandbox_sources, "armbian.list")
     if is_armbian(recipe.distribution) and ARMBIAN_REPO_URL not in skip_repo_urls:
         os.makedirs(sandbox_sources, exist_ok=True)
+        signed_by = ARMBIAN_KEYRING_PATH if install_armbian_key(workspace_path) else ""
         with open(sandbox_armbian, "w") as f:
-            f.write(armbian_source_line(rel) + "\n")
+            f.write(armbian_source_line(rel, signed_by) + "\n")
         # mkosi's own "Syncing package manager metadata" step runs apt-get
         # against mkosi.sandbox before anything else -- before mkosi.skeleton
         # is even copied in, so putting this directory there instead (as
@@ -453,7 +623,7 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         os.makedirs(os.path.join(workspace_path, "mkosi.sandbox", "etc", "apt", "trusted.gpg.d"), exist_ok=True)
         # В сам образ репозиторий тоже нужен: иначе apt update на плате его не
         # знает и обновления ядра приходить перестанут.
-        repo_lines.insert(0, armbian_source_line(rel))
+        repo_lines.insert(0, armbian_source_line(rel, signed_by))
 
         # initramfs.conf выше подложен до установки пакетов, поэтому dpkg видит
         # "существующий, но никем не заявленный" conffile и по умолчанию
@@ -475,17 +645,30 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
                          "dpkg.cfg.d", "edge-noninteractive"),
             os.path.join(workspace_path, "mkosi.skeleton", "etc",
                          "initramfs-tools", "initramfs.conf"),
+            *[
+                os.path.join(workspace_path, t, "etc", "apt", "trusted.gpg.d", "armbian.asc")
+                for t in ("mkosi.sandbox", "mkosi.skeleton", "mkosi.extra")
+            ],
         ):
             if os.path.exists(stale):
                 os.remove(stale)
 
-    for base_tree in ["mkosi.skeleton", "mkosi.extra"]:
+    # mkosi.sandbox gets the user's repositories but NOT the Armbian one: that
+    # already has its own armbian.list there, and listing a source twice makes
+    # apt warn about the target being configured multiple times. Without this
+    # tree, a repository added in the recipe UI reached only the build chroot
+    # and the finished image -- never mkosi's own package manager, which runs
+    # outside the image and is what actually installs the recipe's packages.
+    # Exactly the failure that "Unable to locate package
+    # linux-image-vendor-rk35xx" turned out to be for the Armbian repo.
+    for base_tree in ["mkosi.sandbox", "mkosi.skeleton", "mkosi.extra"]:
+        lines = user_repo_lines if base_tree == "mkosi.sandbox" else repo_lines
         sources_dir = os.path.join(workspace_path, base_tree, "etc", "apt", "sources.list.d")
         os.makedirs(sources_dir, exist_ok=True)
         custom_list = os.path.join(sources_dir, "custom.list")
-        if repo_lines:
+        if lines:
             with open(custom_list, "w") as f:
-                f.write("\n".join(repo_lines) + "\n")
+                f.write("\n".join(lines) + "\n")
         elif os.path.exists(custom_list):
             # The workspace is reused between builds, so a file written by an
             # earlier run would otherwise survive into an image that must not
@@ -568,20 +751,26 @@ def populate_extra_tree(recipe: Recipe, assets: List[RecipeAsset], workspace_pat
         '# Ensure host DNS resolv.conf is copied into rootfs so APT can resolve hosts',
         'cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true',
         'if [ "$ROOT" != "/" ] && [ -d "$ROOT/usr" ]; then',
-        # Without these, /dev/null does not exist inside the chroot (nothing
-        # else populates it at this point in the build), and apt-key -- run
-        # internally by apt-get update against a Signed-By: source -- fails
-        # with "cannot create /dev/null: Permission denied" followed by
-        # "gpgv, gpgv2 or gpgv1 required for verification", even with gpgv
-        # itself installed. The postinst edge-packages chroot already does
-        # this same mount/chroot/unmount around its own apt-get calls.
-        '  mount -t proc proc "$ROOT/proc" 2>/dev/null || true',
-        '  mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true',
-        '  mount --bind /dev "$ROOT/dev" 2>/dev/null || true',
+        # /dev has to be re-bound RECURSIVELY. mkosi's own sandbox builds the
+        # /dev it hands to build scripts as a tmpfs holding empty regular
+        # files, with the real device nodes bind-mounted on top of them one by
+        # one (see DevOperation in mkosi/sandbox.py). A plain "mount --bind"
+        # copies only the tmpfs and drops every one of those submounts, so
+        # $ROOT/dev/null ends up as the bare 0-byte root-owned regular file
+        # underneath. apt-get update then runs apt-key as the unprivileged
+        # _apt user, its "gpgv --version >/dev/null" probe dies with
+        # "cannot create /dev/null: Permission denied", and apt concludes
+        # "gpgv, gpgv2 or gpgv1 required for verification, but neither seems
+        # installed" -- while gpgv is in fact installed. --rbind carries the
+        # submounts along and $ROOT/dev/null is a real character device.
+        '  mount -t proc proc "$ROOT/proc" || echo "[PREPARE] WARNING: proc mount failed ($?)"',
+        '  mount -t sysfs sys "$ROOT/sys" || echo "[PREPARE] WARNING: sysfs mount failed ($?)"',
+        '  mount --rbind /dev "$ROOT/dev" || echo "[PREPARE] WARNING: /dev bind mount failed ($?)"',
+        '  [ -c "$ROOT/dev/null" ] || echo "[PREPARE] WARNING: $ROOT/dev/null is not a device node ($(ls -la "$ROOT/dev/null" 2>&1)) -- apt signature checks will fail"',
         '  chroot "$ROOT" apt-get update --allow-insecure-repositories || true',
         '  umount "$ROOT/proc" 2>/dev/null || true',
         '  umount "$ROOT/sys" 2>/dev/null || true',
-        '  umount -l "$ROOT/dev" 2>/dev/null || true',
+        '  umount -R -l "$ROOT/dev" 2>/dev/null || true',
         'elif command -v apt-get >/dev/null 2>&1; then',
         '  apt-get update --allow-insecure-repositories || true',
         'fi',
@@ -743,7 +932,16 @@ fi
     # added when the recipe has not already specified an equivalent, so a recipe
     # can override the console or verbosity without ending up with duplicates.
     _kp = (recipe.kernel_params or "").strip()
-    _loader_opts = ["root=LABEL=edgeroot", "rw"]
+    # Only the armbian flow needs the PARTUUID: it is the one that clones the
+    # boot medium onto another disk, leaving two filesystems answering to
+    # LABEL=edgeroot at once (see IMAGE_ROOT_PARTUUID). The amd64 images have
+    # no such duality, so their loader entry is left alone.
+    _root_spec = (
+        f"root=PARTUUID={IMAGE_ROOT_PARTUUID}"
+        if is_armbian(recipe.distribution)
+        else "root=LABEL=edgeroot"
+    )
+    _loader_opts = [_root_spec, "rw"]
     if "quiet" not in _kp:
         _loader_opts += ["quiet", "loglevel=3"]
     if "fsck.mode" not in _kp:
@@ -814,10 +1012,13 @@ cp -f /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
 # 1. Install pre-downloaded Edge platform .deb packages inside chroot
 if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*.deb 2>/dev/null)" ]; then
   echo "[POSTINST] Installing pre-downloaded Edge platform packages via dpkg..."
-  # Mount pseudo-filesystems for apt/dpkg to work correctly
+  # Mount pseudo-filesystems for apt/dpkg to work correctly. /dev must be
+  # bound recursively -- see the comment on the prepare script's own mounts:
+  # a plain --bind loses mkosi's per-node submounts and leaves /dev/null as an
+  # unwritable regular file, which silently breaks apt signature verification.
   mount -t proc proc "$ROOT/proc" 2>/dev/null || true
   mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true
-  mount --bind /dev "$ROOT/dev" 2>/dev/null || true
+  mount --rbind /dev "$ROOT/dev" 2>/dev/null || true
 
   chroot "$ROOT" /bin/bash -c "
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\\$PATH
@@ -878,7 +1079,7 @@ if [ -d "$ROOT/opt/edge_packages" ] && [ -n "$(ls -A "$ROOT/opt/edge_packages"/*
   # Unmount pseudo-filesystems
   umount "$ROOT/proc" 2>/dev/null || true
   umount "$ROOT/sys" 2>/dev/null || true
-  umount -l "$ROOT/dev" 2>/dev/null || true
+  umount -R -l "$ROOT/dev" 2>/dev/null || true
 
   rm -rf "$ROOT/opt/edge_packages"
 fi
@@ -907,7 +1108,7 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
   # Re-mount pseudo-filesystems for bootctl and update-initramfs to work correctly
   mount -t proc proc "$ROOT/proc" 2>/dev/null || true
   mount -t sysfs sys "$ROOT/sys" 2>/dev/null || true
-  mount --bind /dev "$ROOT/dev" 2>/dev/null || true
+  mount --rbind /dev "$ROOT/dev" 2>/dev/null || true
   mount -t devpts devpts "$ROOT/dev/pts" 2>/dev/null || true
 
   chroot "$ROOT" /bin/bash -c '
@@ -1012,7 +1213,7 @@ if [ "$ROOT" != "/" ] && [ -d "$ROOT/tmp" ]; then
   umount "$ROOT/dev/pts" 2>/dev/null || true
   umount "$ROOT/proc" 2>/dev/null || true
   umount "$ROOT/sys" 2>/dev/null || true
-  umount -l "$ROOT/dev" 2>/dev/null || true
+  umount -R -l "$ROOT/dev" 2>/dev/null || true
 fi
 
 # The very first thing this script did was overwrite /etc/resolv.conf with
@@ -1258,6 +1459,29 @@ WantedBy=multi-user.target
                 os.symlink("/etc/systemd/system/edge-growfs.service", growfs_link)
             except Exception:
                 pass
+    else:
+        # Skipping the write above is not enough: mkosi.extra is never wiped
+        # between builds, so a unit left by an earlier run of this same
+        # workspace keeps shipping -- and it did. Caught on hardware: an
+        # armbian image carried edge-growfs.service (dated two builds back)
+        # plus its enabling symlink, growfs.sh ran against the boot disk, and
+        # since the board boots off the card that disk WAS the card.
+        # "sfdisk --relocate gpt-bak-std" then rewrote the card's GPT header
+        # to point at the end of the physical card, and the partition entry
+        # array no longer matched its own checksum. U-Boot tolerates that and
+        # falls back to the backup table; Linux discards the table outright,
+        # so the card came up with no partitions at all and the board silently
+        # booted the installed system instead of the card under test.
+        for stale in (
+            os.path.join(growfs_systemd_dir, "edge-growfs.service"),
+            os.path.join(growfs_wants_dir, "edge-growfs.service"),
+            growfs_script_path,
+        ):
+            if os.path.exists(stale) or os.path.islink(stale):
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
 
     # 5c. Edge network firstboot (systemd-networkd port of networking-cli).
     # The Edge platform's own /opt/edge/bin/networking-cli is built entirely on

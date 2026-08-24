@@ -68,10 +68,17 @@ ALWAYS_EDGE_PACKAGES = ("edge-base", "edge-python3-core")
 # repo, not the absence of the verifier binary itself. Caught live in a
 # build log: the custom-repo apt-get update wrapped in "|| true" was silently
 # failing on every build that used one.
+# "ca-certificates" -- without the CA bundle, apt inside the rootfs cannot
+# fetch anything over HTTPS. apt.armbian.com redirects to an HTTPS mirror, so
+# the chroot's apt-get update ended every build with "No system certificates
+# available. Try installing ca-certificates" followed by "Certificate
+# verification failed: The certificate is NOT trusted", i.e. the Armbian index
+# was never actually read inside the image -- neither at build time nor on the
+# board afterwards, which quietly cuts the device off from kernel updates.
 _REQUIRED_PACKAGES = (
     "apt", "bash", "coreutils", "login", "sudo",
     "systemd-boot", "systemd-sysv", "initramfs-tools", "zstd", "openssh-server",
-    "fdisk", "gpgv",
+    "fdisk", "gpgv", "ca-certificates",
 )
 
 # Armbian публикует репозиторий и под Debian-, и под Ubuntu-суиты; по release
@@ -116,16 +123,28 @@ def board_console(board: Any) -> str:
     return ARMBIAN_BOARD_CONSOLE.get((board or "").lower(), "ttyS0,115200")
 
 
-def armbian_source_line(release: Any) -> str:
-    """
-    Строка sources.list для репозитория Armbian.
+# Where the Armbian repo signing key is dropped inside every tree that carries
+# the sources.list line. apt reads armoured keys from trusted.gpg.d directly,
+# so no gpg --dearmor step is involved.
+ARMBIAN_KEYRING_PATH = "/etc/apt/trusted.gpg.d/armbian.asc"
 
-    Нужна в двух деревьях сразу: mkosi.skeleton читает apt во время сборки,
-    mkosi.extra уезжает в готовый образ. Пропуск skeleton уже приводил к
-    "Unable to locate package linux-image-vendor-rk35xx" -- проверка индекса
-    пакеты находила, а apt внутри mkosi о репозитории не знал.
+
+def armbian_source_line(release: Any, signed_by: str = "") -> str:
     """
-    return f"deb [trusted=yes] {ARMBIAN_REPO_URL} {release or 'noble'} main"
+    sources.list line for the Armbian repository.
+
+    Needed in two trees at once: mkosi.skeleton is what apt reads during the
+    build, mkosi.extra is what ends up in the finished image. Skipping skeleton
+    used to produce "Unable to locate package linux-image-vendor-rk35xx" -- the
+    index check found the packages, but apt inside mkosi knew no such repo.
+
+    With signed_by set, apt verifies the repo against that key. Without it the
+    source falls back to [trusted=yes]: the key is fetched over the network at
+    build time, and a repo that cannot be reached at all is worse than one that
+    is trusted blindly, so a failed fetch must not break the build.
+    """
+    options = f"signed-by={signed_by}" if signed_by else "trusted=yes"
+    return f"deb [{options}] {ARMBIAN_REPO_URL} {release or 'noble'} main"
 
 _DEBIAN_PKG_MAP: Dict[str, str] = {
     "linux-image-generic": "linux-image-amd64",
@@ -280,6 +299,16 @@ def resolve_package_list(recipe, exclude=frozenset()) -> Tuple[List[str], List[s
     # always carries SPI-NOR, so this is armbian-wide rather than per-board.
     if is_armbian(recipe.distribution) and "mtd-utils" not in pkgs:
         pkgs.append("mtd-utils")
+
+    # "wireless-regdb" -- the regulatory database cfg80211 loads to know which
+    # channels and transmit powers are legal in the configured country. The
+    # driver is built into the Armbian vendor kernel, so update-initramfs
+    # reported "Possible missing firmware /lib/firmware/regulatory.db for
+    # built-in driver cfg80211" on every build. The package is a few kilobytes
+    # of Architecture: all data; without it any wireless adapter plugged into
+    # the board falls back to the most restrictive world-roaming profile.
+    if is_armbian(recipe.distribution) and "wireless-regdb" not in pkgs:
+        pkgs.append("wireless-regdb")
 
     edge_pkgs = [p for p in pkgs if p.lower().startswith("edge-")]
     for always in ALWAYS_EDGE_PACKAGES:

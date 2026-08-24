@@ -2,6 +2,8 @@
 
 Automated image-building factory of the Edge ecosystem. A web-based control plane and background job runner for `mkosi` allowing users to visually configure, manage, and execute OS image recipes for Debian 12+ and Ubuntu 22+ (amd64/arm64) to produce monolithic provisioning artifacts (`.raw.xz`, `.iso`).
 
+Beyond generic amd64 images, recipes can target specific arm64 single-board computers — see [ARM64 Board Support](#-9-arm64-board-support-rk3588--orange-pi-5-plus) for the RK3588 / Orange Pi 5 Plus pipeline, which produces a self-provisioning microSD card that installs itself onto the board's NVMe.
+
 ---
 
 ## 🏗️ Architecture & Tech Stack
@@ -52,10 +54,41 @@ Both **ISO** installer and **RAW.XZ** disk image output artifacts strictly adher
 
 ### 🧩 8. Architecture-Aware Package Skipping
 - Before `mkosi` runs, every package a recipe resolves to is checked against the `binary-<arch>` indices of both the configured Edge repositories and the official distribution mirror. Index names are cached on disk for a day, so the multi-megabyte distribution index is fetched at most once per day rather than per build.
-- With **Skip packages missing for this architecture** enabled on the recipe, unavailable packages are dropped from the build and listed per build in the history; without it the build fails in seconds with the exact list instead of dying inside `apt` minutes later.
+- With **Skip packages missing for this architecture** enabled on the recipe, unavailable packages are dropped from the build and listed per build in the history; without it the build fails in seconds with the exact list instead of dying inside `apt` minutes later. Both the pre-flight list and the end-of-build summary name every skipped package and where it came from, rather than only counting them.
 - Packages required to boot (kernel, `apt`, `bash`, `systemd-boot`, …) are never skipped. `edge-*` packages are skippable, so an arm64 image builds before arm64 platform packages exist.
 - An unreachable index means "unknown", not "missing": if any index fails to load the whole check is skipped, so a mirror outage can never silently drop packages from an image.
 - When `apt` fails on a dependency the name-level check cannot see, the offending package names are parsed out of the log and appended to the same list.
+
+### 🔧 9. ARM64 Board Support (RK3588 / Orange Pi 5 Plus)
+
+Selecting **Armbian** as the distribution turns a recipe into an arm64 board build. Armbian is used as a *hardware layer*, not as a base system: the rootfs is still plain Debian or Ubuntu (chosen from the release), and only the parts that do not exist upstream come from `apt.armbian.com` — the Rockchip BSP kernel (`linux-image-vendor-rk35xx`), the matching DTB, and the board's U-Boot. The target board is picked in the recipe and is shown on the recipe card, in the build console, in build history and in storage.
+
+- **Repository trust.** The Armbian signing key is fetched at build time and shipped into the image, so the source is added with `signed-by=` rather than `trusted=yes`, and `apt update` verifies the index both during the build and on the running board. `ca-certificates` and `gpgv` are always installed — without them the repo (which redirects to an HTTPS mirror) is silently unreachable inside the rootfs.
+- **Bootloader.** Written into the built `.raw` by Armbian's own `platform_install.sh` taken from the image, so the idbloader/u-boot offsets are never duplicated here and cannot drift from upstream. A 16 MB unformatted partition reserves the area the RK3588 BootROM reads.
+- **Firmware.** Blobs the board's drivers ask for by name (`rtl_nic/rtl8125b-2.fw` for the 2.5GbE ports, `rockchip/dptx.bin` for the USB-C DisplayPort output) are fetched individually from the upstream `linux-firmware` project and cached across builds, instead of pulling the ~655 MB `linux-firmware` package. They are placed before the initramfs is generated, so the initrd carries them too.
+
+#### Card → NVMe provisioning
+
+One microSD card provisions any number of boards. On first boot the card clones itself onto the NVMe, writes the bootloader into SPI NOR with `flashcp` (seconds, against minutes for a `dd` through `/dev/mtdblock0`), grows the last partition over the full disk, gives the clone its own machine-id and SSH host keys, and signals completion on the board's LED and console. The marker that provisioning succeeded lives on the *target*, never on the card, so the same card keeps working on the next board.
+
+#### Which medium boots
+
+A `dd` clone copies every identifier a filesystem and a partition table carry — label, filesystem UUID and PARTUUID alike — so after provisioning the card and the installed system are indistinguishable by any of them. To keep the choice deterministic, the image carries a **fixed root PARTUUID** that the loader entry names, and provisioning stamps the clone with a **fresh random one** and rewrites the clone's own loader entry to match:
+
+- **Card inserted** → the card boots and re-images the NVMe from it. This is how a new image is tested on a board that is already provisioned.
+- **No card** → the NVMe boots from its own PARTUUID.
+
+> **Filesystem labels are deliberately left alone** (`edgeroot`, `edgeboot`, `edgelog`, `edgestor`) — the platform running on the installed system addresses its filesystems by them. Only the root *partition* UUID is made unique.
+>
+> A consequence worth knowing: `/etc/fstab` still mounts `/var/log/edge` and `/var/opt/edge` by label, and those labels exist on both media at once. **With a card inserted into a provisioned board, those two mounts may come from the card rather than from the NVMe.** This is accepted behaviour: it does not affect booting, and it does not affect re-imaging the NVMe, which addresses the target by device path. The card is a transit medium and is not meant to be run as a working system.
+
+#### Written-card compatibility
+
+Some card writers (Raspberry Pi Imager among them) expand the partition table onto the physical card after writing the image: they relocate the backup GPT to the end of the card and move `PartitionEntryLBA` in the primary header to `FirstUsableLBA - 32`, recomputing the header checksum but **not** moving the 16 KB entry array. The stored entry-array checksum then describes bytes nobody wrote — U-Boot tolerates this and falls back to the backup table, but Linux discards the table outright and the card enumerates no partitions at all. The build therefore places an identical copy of the entry array at that address as well, so the pointer lands on valid data wherever it ends up. The header itself is left untouched, and only zeroed space inside the bootloader gap is used.
+
+#### Boot-time behaviour
+
+`systemd-networkd-wait-online` is set to `--any`. It otherwise waits for *every* managed link, and on a two-port board with one cable plugged in that meant `network-online.target` — and everything ordered after it, including provisioning, which needs no network at all — stalled until the 120 s timeout on every boot.
 
 ---
 

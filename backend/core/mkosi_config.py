@@ -1,12 +1,14 @@
 import os
 from models import Recipe
 from core.packages import (
+    ARMBIAN_KEYRING_PATH,
     ARMBIAN_REPO_URL,
     armbian_source_line,
     base_distribution,
     is_armbian,
     resolve_package_list,
 )
+from core.workspace import armbian_key_installed
 
 
 def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset(),
@@ -94,7 +96,10 @@ def generate_mkosi_conf(recipe: Recipe, workspace_path: str, exclude=frozenset()
     # поддержки этих плат нет. Репозиторий добавляется сам, а не руками в UI,
     # иначе выбор платы собирал бы образ без ядра для неё.
     if is_armbian(recipe.distribution) and ARMBIAN_REPO_URL not in skip_repo_urls:
-        sources_lines.append(armbian_source_line(rel))
+        # populate_extra_tree() runs first and has already tried to fetch the
+        # repo key; this only reflects the outcome, it never fetches itself.
+        signed_by = ARMBIAN_KEYRING_PATH if armbian_key_installed(workspace_path) else ""
+        sources_lines.append(armbian_source_line(rel, signed_by))
 
     # Custom APT repositories configured in Recipe UI
     if recipe.repositories and isinstance(recipe.repositories, list):

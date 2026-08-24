@@ -121,6 +121,19 @@ When building Debian or Ubuntu images for the Orange Pi 5 Plus in Edge DURO:
 * Kernel: `linux-image-vendor-rk35xx` (Rockchip BSP 6.1.x kernel with full hardware/NPU/VPU/GPU/Display support).
 * DTB: `linux-dtb-vendor-rk35xx` (contains `rockchip/rk3588-orangepi-5-plus.dtb`).
 * U-Boot: `linux-u-boot-orangepi5-plus-vendor` (contains board SPL & U-Boot proper binaries).
+* SPI tooling: `mtd-utils` (`flashcp`, used to write the SPI bootloader through the raw MTD device).
+* Regulatory data: `wireless-regdb` (`cfg80211` is built into the vendor kernel and asks for `regulatory.db`).
+
+### Firmware Blobs Fetched Directly (not via `linux-firmware`)
+Ubuntu ships both of these only inside the ~655 MB `linux-firmware` package, which is
+too slow and too flaky to pull during a build. They are fetched individually from the
+upstream `linux-firmware` project at prepare time and cached across builds
+(`_BOARD_FIRMWARE` in `core/workspace.py`):
+
+| File | Driver | Without it |
+| :--- | :--- | :--- |
+| `rtl_nic/rtl8125b-2.fw` | `r8169` | The 2.5GbE ports link up degraded; `dmesg` shows "Unable to load firmware" |
+| `rockchip/dptx.bin` | `rockchipdrm` | The USB-C DisplayPort 1.4a output stays dark |
 
 ### U-Boot Configuration (`/boot/extlinux/extlinux.conf`):
 ```text
@@ -134,7 +147,7 @@ LABEL Edge OS
 ### Automated Flashing / Provisioning Workflow:
 1. **Partition 00 Gap**: `00-rk3588-loader.conf` reserves the first 16 MB of the raw disk image for U-Boot.
 2. **Bootloader Injection**: `write_bootloader_into_image()` writes `idbloader.img` to sector 64 and `u-boot.itb` to sector 16384.
-3. **Automated NVMe Clone**: When booting from microSD, `edge-firstboot.service` (`core/rk3588.py`) detects an installed NVMe SSD (`/dev/nvme0n1`), clones the partition layout, writes U-Boot to SPI Flash (`/dev/mtdblock0`), expands the root filesystem, and makes the system standalone.
+3. **Automated NVMe Clone**: When booting from microSD, `edge-firstboot.service` (`core/rk3588.py`) detects an installed NVMe SSD (`/dev/nvme0n1`), clones the partition layout, writes U-Boot to SPI Flash (`flashcp` to `/dev/mtd0`, falling back to Armbian's own `dd`-based `write_uboot_platform_mtd` on `/dev/mtdblock0`), expands the root filesystem, and makes the system standalone.
 
 ---
 

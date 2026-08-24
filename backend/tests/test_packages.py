@@ -115,3 +115,32 @@ def test_edge_base_is_not_critical():
     assert is_critical("apt")
     assert is_critical("linux-image-arm64")
     assert "edge-base" not in CRITICAL_PACKAGES
+
+
+def test_ca_certificates_ships_so_apt_can_reach_https_mirrors():
+    """
+    apt.armbian.com redirects to an HTTPS mirror. Without the CA bundle in the
+    rootfs, the chroot's apt-get update ended every build with "No system
+    certificates available. Try installing ca-certificates" and then
+    "Certificate verification failed: The certificate is NOT trusted" -- the
+    Armbian index was never read inside the image, so the board shipped unable
+    to see kernel updates. Caught in a real build log.
+    """
+    std, _ = resolve_package_list(make_recipe())
+    assert "ca-certificates" in std
+
+
+def test_wireless_regdb_ships_for_boards_with_cfg80211_built_in():
+    """
+    update-initramfs reported "Possible missing firmware
+    /lib/firmware/regulatory.db for built-in driver cfg80211" on every armbian
+    build. Without the database any wireless adapter on the board is stuck on
+    the most restrictive world-roaming profile.
+    """
+    std, _ = resolve_package_list(make_recipe(
+        distribution="armbian", release="noble", architecture="arm64", board="opi5-plus"))
+    assert "wireless-regdb" in std
+
+    # amd64 images have no board radio of their own to regulate.
+    std_amd, _ = resolve_package_list(make_recipe())
+    assert "wireless-regdb" not in std_amd

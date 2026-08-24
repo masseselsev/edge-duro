@@ -19,6 +19,24 @@ def isolated_workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path))
 
 
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """
+    populate_extra_tree() fetches two files from the internet (the NIC
+    firmware and the Armbian repo key). Both fall back gracefully, and the
+    fallback is what the suite should exercise by default -- otherwise every
+    armbian test would hit the network and behave differently depending on
+    whether it succeeded. Tests that care about the fetched path patch
+    urlopen themselves.
+    """
+    import urllib.error
+
+    def refuse(*_a, **_kw):
+        raise urllib.error.URLError("network disabled in tests")
+
+    monkeypatch.setattr("core.workspace.urllib.request.urlopen", refuse)
+
+
 def make_recipe(**overrides):
     """Минимальный duck-typed рецепт: core/ читает только атрибуты."""
     base = dict(

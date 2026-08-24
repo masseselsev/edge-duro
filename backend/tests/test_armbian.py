@@ -142,7 +142,7 @@ def test_board_specific_firmware_is_gated_on_the_exact_board(tmp_path, monkeypat
     same NIC -- gating on is_armbian() alone would have shipped it everywhere.
 
     Fetched directly from upstream (a 3 KB file) rather than through apt's
-    ~655 MB linux-firmware package -- see _fetch_opi5_plus_firmware in
+    ~655 MB linux-firmware package -- see _fetch_firmware_file in
     core/workspace.py for why the apt route was abandoned. The real network
     call is replaced here so the test doesn't depend on it succeeding.
     """
@@ -176,6 +176,85 @@ def test_board_specific_firmware_is_gated_on_the_exact_board(tmp_path, monkeypat
         populate_extra_tree(_armbian_recipe(board="nanopc-t6-lts"), [], ws2)
         fw_path2 = os.path.join(ws2, "mkosi.extra", "lib", "firmware", "rtl_nic", "rtl8125b-2.fw")
         assert not os.path.exists(fw_path2)
+
+
+def test_the_boards_displayport_firmware_ships_too(tmp_path, monkeypatch):
+    """
+    update-initramfs flagged "Possible missing firmware /lib/firmware/rockchip/
+    dptx.bin for built-in driver rockchipdrm" on every build. rockchipdrm
+    drives the DisplayPort controller behind the board's two USB-C outputs;
+    without the blob they stay dark. Same fetch path as the NIC firmware --
+    98 KB from upstream instead of the 655 MB linux-firmware package.
+    """
+    import os
+    import urllib.error
+    from unittest.mock import MagicMock, patch
+
+    from core.workspace import _FIRMWARE_BASE_URL, populate_extra_tree
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    payloads = {
+        _FIRMWARE_BASE_URL + "rtl_nic/rtl8125b-2.fw": b"\x00\x00\x00\x00nic",
+        _FIRMWARE_BASE_URL + "rockchip/dptx.bin": b"\x10\x80\x01\x00dp",
+    }
+
+    def fake_urlopen(req, timeout=30):
+        # populate_extra_tree also fetches the Armbian repo key; only the
+        # firmware URLs are of interest here, the rest may fail.
+        if req.full_url not in payloads:
+            raise urllib.error.URLError("not served in this test")
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.read.return_value = payloads[req.full_url]
+        return cm
+
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws, exist_ok=True)
+    with patch("core.workspace.urllib.request.urlopen", side_effect=fake_urlopen):
+        populate_extra_tree(_armbian_recipe(board="opi5-plus"), [], ws)
+
+    dp = os.path.join(ws, "mkosi.extra", "lib", "firmware", "rockchip", "dptx.bin")
+    assert os.path.exists(dp)
+    with open(dp, "rb") as f:
+        assert f.read() == payloads[_FIRMWARE_BASE_URL + "rockchip/dptx.bin"]
+
+    # And in the skeleton tree, which is what update-initramfs can actually
+    # see: the kernel package builds the initrd during its own configuration,
+    # long before mkosi copies the extra trees in.
+    skel = os.path.join(ws, "mkosi.skeleton", "usr", "lib", "firmware", "rockchip", "dptx.bin")
+    assert os.path.exists(skel)
+
+
+def test_a_firmware_file_with_the_wrong_magic_is_discarded(tmp_path, monkeypatch):
+    """
+    A mirror or captive portal answering 200 with an HTML page would otherwise
+    be written to /lib/firmware under the driver's own filename, and the board
+    would fail to load it with no clue why. Each entry carries the first bytes
+    of the genuine file for exactly this check.
+    """
+    import os
+    from unittest.mock import MagicMock, patch
+
+    from core.workspace import _FIRMWARE_BASE_URL, _fetch_board_firmware
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    ws = str(tmp_path / "ws")
+
+    def fake_urlopen(req, timeout=30):
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.read.return_value = b"<!DOCTYPE html><title>404</title>"
+        return cm
+
+    with patch("core.workspace.urllib.request.urlopen", side_effect=fake_urlopen):
+        _fetch_board_firmware(ws, "opi5-plus")
+
+    extra = os.path.join(ws, "mkosi.extra", "lib", "firmware")
+    skel = os.path.join(ws, "mkosi.skeleton", "usr", "lib", "firmware")
+    assert not os.path.exists(os.path.join(extra, "rtl_nic", "rtl8125b-2.fw"))
+    assert not os.path.exists(os.path.join(extra, "rockchip", "dptx.bin"))
+    assert not os.path.exists(os.path.join(skel, "rockchip", "dptx.bin"))
+    assert _FIRMWARE_BASE_URL.startswith("https://")
 
 
 def test_etc_hosts_is_written_at_build_time(tmp_path):
@@ -262,8 +341,13 @@ def test_incomplete_clone_does_not_look_provisioned():
     """
     script = provision_script()
     check_at = script.index("blkid -t LABEL=edgeroot")
-    spi_at = script.index("edge_rk3588_write_spi\n  edge_rk3588_individualize")
-    assert check_at < spi_at, "проверка обязана идти до прошивки SPI и маркера"
+    # Anchored on the call site rather than on the two calls being adjacent:
+    # more steps have since been added between them, and the guarantee under
+    # test is the ordering against the completeness check, not the spacing.
+    spi_at = script.index("  edge_rk3588_write_spi\n")
+    marker_at = script.index('edge_rk3588_individualize "$target"')
+    assert check_at < spi_at, "проверка обязана идти до прошивки SPI"
+    assert check_at < marker_at, "проверка обязана идти до маркера"
 
 
 def test_target_is_reprovisioned_even_when_already_written():
@@ -738,6 +822,13 @@ def test_prepare_script_mounts_devfs_before_chrooting_for_apt_update(tmp_path):
     denied", cascading into "gpgv, gpgv2 or gpgv1 required for verification"
     even with gpgv itself installed. The postinst edge-packages chroot
     already mounts these three before its own chroot calls -- mirror that.
+
+    The /dev bind has to be RECURSIVE. mkosi's sandbox builds the /dev it
+    hands to scripts as a tmpfs of empty regular files with the real device
+    nodes bind-mounted on top (DevOperation in mkosi/sandbox.py); a plain
+    --bind carries only the tmpfs, and a build with it in place still logged
+    the exact same "cannot create /dev/null: Permission denied" -- with
+    diagnostics confirming $ROOT/dev/null as a 0-byte regular file.
     """
     import os
 
@@ -753,7 +844,24 @@ def test_prepare_script_mounts_devfs_before_chrooting_for_apt_update(tmp_path):
     before = script[:chroot_at]
     assert 'mount -t proc proc "$ROOT/proc"' in before
     assert 'mount -t sysfs sys "$ROOT/sys"' in before
-    assert 'mount --bind /dev "$ROOT/dev"' in before
+    assert 'mount --rbind /dev "$ROOT/dev"' in before
+    assert 'mount --bind /dev "$ROOT/dev"' not in script
+
+
+def test_every_dev_mount_into_a_chroot_is_recursive():
+    """
+    The postinst chroots mount /dev the same way and for the same reason as
+    mkosi.prepare does; a non-recursive bind there leaves them with the same
+    dead /dev/null, only without any log line to show for it (their mounts
+    are wrapped in "2>/dev/null || true").
+    """
+    import re
+
+    import core.workspace
+
+    source = open(core.workspace.__file__).read()
+    assert 'mount --bind /dev' not in source
+    assert len(re.findall(r'mount --rbind /dev "\$ROOT/dev"', source)) == 3
 
 
 def test_initramfs_conf_exists_before_packages_are_installed(tmp_path):
@@ -874,3 +982,434 @@ def test_iso_generation_is_never_triggered_for_armbian():
 def test_interface_rename_skips_virtual_devices():
     # lo, bridge и veth не имеют /sys/class/net/*/device.
     assert '/sys/class/net/$iface/device' in rename_script()
+
+
+_FAKE_ARMBIAN_KEY = b"-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nZmFrZQ==\n-----END PGP PUBLIC KEY BLOCK-----\n"
+
+
+def _urlopen_serving(payloads):
+    """urlopen stub returning payloads[url]; anything else raises."""
+    from unittest.mock import MagicMock
+
+    import urllib.error
+
+    def fake(req, timeout=15):
+        url = getattr(req, "full_url", req)
+        if url not in payloads:
+            raise urllib.error.URLError(f"unexpected url {url}")
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.read.return_value = payloads[url]
+        return cm
+
+    return fake
+
+
+def test_armbian_repo_key_is_shipped_so_apt_can_verify_the_index(tmp_path, monkeypatch):
+    """
+    apt.armbian.com signs its indices, but no keyring was ever shipped, so
+    every apt that saw the repo -- mkosi's own sandbox one, the build chroot's
+    and the one left on the board -- logged "The signatures couldn't be
+    verified because no keyring is specified" and only carried on because the
+    source said [trusted=yes]. With the key present the source can name it and
+    the index is actually verified.
+    """
+    import os
+    from unittest.mock import patch
+
+    from core.workspace import _ARMBIAN_KEY_URL, populate_extra_tree
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws, exist_ok=True)
+
+    with patch("core.workspace.urllib.request.urlopen",
+               side_effect=_urlopen_serving({_ARMBIAN_KEY_URL: _FAKE_ARMBIAN_KEY})):
+        populate_extra_tree(_armbian_recipe(), [], ws)
+
+    # mkosi.sandbox is what mkosi's own apt reads, mkosi.skeleton what the
+    # build chroot reads, mkosi.extra what ends up on the board.
+    for tree in ("mkosi.sandbox", "mkosi.skeleton", "mkosi.extra"):
+        key = os.path.join(ws, tree, "etc", "apt", "trusted.gpg.d", "armbian.asc")
+        assert os.path.exists(key), tree
+        with open(key, "rb") as f:
+            assert f.read() == _FAKE_ARMBIAN_KEY
+
+    sandbox_list = open(os.path.join(
+        ws, "mkosi.sandbox", "etc", "apt", "sources.list.d", "armbian.list")).read()
+    assert "signed-by=/etc/apt/trusted.gpg.d/armbian.asc" in sandbox_list
+    assert "trusted=yes" not in sandbox_list
+
+
+def test_armbian_source_stays_trusted_when_the_key_cannot_be_fetched(tmp_path):
+    """
+    The key is fetched over the network at build time. A repo that apt refuses
+    to touch at all is worse than one it trusts blindly, so a failed fetch has
+    to fall back to [trusted=yes] rather than break the build. The autouse
+    no_network fixture makes the fetch fail here.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+
+    assert not os.path.exists(os.path.join(
+        ws, "mkosi.sandbox", "etc", "apt", "trusted.gpg.d", "armbian.asc"))
+    sandbox_list = open(os.path.join(
+        ws, "mkosi.sandbox", "etc", "apt", "sources.list.d", "armbian.list")).read()
+    assert "trusted=yes" in sandbox_list
+
+
+def test_a_key_download_that_is_not_a_pgp_key_is_discarded(tmp_path, monkeypatch):
+    """
+    Same trap as the firmware fetch: a mirror or captive portal answering 200
+    with an HTML error page would otherwise be written out as the repo key,
+    and apt would reject the repo outright on the finished board.
+    """
+    import os
+    from unittest.mock import patch
+
+    from core.workspace import _ARMBIAN_KEY_URL, install_armbian_key
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws, exist_ok=True)
+
+    with patch("core.workspace.urllib.request.urlopen",
+               side_effect=_urlopen_serving({_ARMBIAN_KEY_URL: b"<html>404</html>"})):
+        assert install_armbian_key(ws) is False
+
+    assert not os.path.exists(os.path.join(
+        ws, "mkosi.extra", "etc", "apt", "trusted.gpg.d", "armbian.asc"))
+
+
+def test_moving_a_recipe_off_armbian_drops_the_repo_key(tmp_path, monkeypatch):
+    """
+    Workspaces are reused between builds. The stale-file cleanup already
+    covers the sources list and the dpkg flags; the key has to go with them,
+    or a plain Debian image keeps carrying Armbian's signing key.
+    """
+    import os
+    from unittest.mock import patch
+
+    from core.workspace import _ARMBIAN_KEY_URL, populate_extra_tree
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws, exist_ok=True)
+
+    with patch("core.workspace.urllib.request.urlopen",
+               side_effect=_urlopen_serving({_ARMBIAN_KEY_URL: _FAKE_ARMBIAN_KEY})):
+        populate_extra_tree(_armbian_recipe(), [], ws)
+
+    populate_extra_tree(_armbian_recipe(distribution="debian", release="bookworm"), [], ws)
+
+    for tree in ("mkosi.sandbox", "mkosi.skeleton", "mkosi.extra"):
+        assert not os.path.exists(os.path.join(
+            ws, tree, "etc", "apt", "trusted.gpg.d", "armbian.asc")), tree
+
+
+def test_recipe_repositories_reach_the_package_manager_sandbox(tmp_path):
+    """
+    Same class of bug the Armbian repo already hit: a repository added in the
+    recipe UI was written to mkosi.skeleton and mkosi.extra only, so the build
+    chroot and the finished image knew about it but mkosi's own apt -- the one
+    that actually installs the recipe's packages, run outside the image --
+    never did. A package that exists only in a custom repo could not install.
+
+    The Armbian source itself stays out of this file: it has its own
+    armbian.list in the same directory, and apt warns when a target is
+    configured twice.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(repositories=[
+        {"url": "http://example.invalid/repo", "suite": "noble", "components": "main"}
+    ]), [], ws)
+
+    sandbox_custom = os.path.join(
+        ws, "mkosi.sandbox", "etc", "apt", "sources.list.d", "custom.list")
+    assert os.path.exists(sandbox_custom)
+    content = open(sandbox_custom).read()
+    assert "http://example.invalid/repo noble main" in content
+    assert "apt.armbian.com" not in content
+
+
+def test_a_recipe_without_repositories_leaves_no_sandbox_sources(tmp_path):
+    """The workspace is reused: a list written by an earlier build must go."""
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(repositories=[
+        {"url": "http://example.invalid/repo", "components": "main"}
+    ]), [], ws)
+    populate_extra_tree(_armbian_recipe(repositories=[]), [], ws)
+
+    assert not os.path.exists(os.path.join(
+        ws, "mkosi.sandbox", "etc", "apt", "sources.list.d", "custom.list"))
+
+
+def test_retargeting_a_workspace_drops_the_previous_boards_firmware(tmp_path, monkeypatch):
+    """
+    Workspaces are reused between builds. Without a sweep, an image retargeted
+    at another board -- or moved off armbian entirely -- keeps shipping blobs
+    for silicon it does not have, and nothing in the build says so.
+    """
+    import os
+    from unittest.mock import MagicMock, patch
+
+    from core.workspace import _FIRMWARE_BASE_URL, _fetch_board_firmware
+
+    monkeypatch.setenv("DURO_WORKSPACE_PATH", str(tmp_path / "wsroot"))
+    ws = str(tmp_path / "ws")
+    payloads = {
+        _FIRMWARE_BASE_URL + "rtl_nic/rtl8125b-2.fw": b"\x00\x00\x00\x00nic",
+        _FIRMWARE_BASE_URL + "rockchip/dptx.bin": b"\x10\x80\x01\x00dp",
+    }
+
+    def fake_urlopen(req, timeout=30):
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.read.return_value = payloads[req.full_url]
+        return cm
+
+    with patch("core.workspace.urllib.request.urlopen", side_effect=fake_urlopen):
+        _fetch_board_firmware(ws, "opi5-plus")
+
+    nic = os.path.join(ws, "mkosi.extra", "lib", "firmware", "rtl_nic", "rtl8125b-2.fw")
+    assert os.path.exists(nic)
+
+    # Same workspace, no longer an armbian recipe.
+    _fetch_board_firmware(ws, "")
+    assert not os.path.exists(nic)
+    assert not os.path.exists(os.path.join(
+        ws, "mkosi.skeleton", "usr", "lib", "firmware", "rockchip", "dptx.bin"))
+
+
+def test_armbian_boots_by_partuuid_not_by_label(tmp_path):
+    """
+    dd copies the label, the filesystem UUID and the PARTUUID alike, so after
+    provisioning the card and the NVMe answer to LABEL=edgeroot identically
+    (verified on hardware -- all three matched). The kernel then took whichever
+    blkid returned first, and a freshly written test card silently booted the
+    installed system. The image therefore names a PARTUUID nothing else on the
+    board carries.
+    """
+    import os
+
+    from core.workspace import IMAGE_ROOT_PARTUUID, populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(_armbian_recipe(), [], ws)
+    postinst = open(os.path.join(ws, "mkosi.postinst")).read()
+
+    assert f"root=PARTUUID={IMAGE_ROOT_PARTUUID}" in postinst
+    assert "root=LABEL=edgeroot" not in postinst
+
+
+def test_amd64_images_keep_booting_by_label(tmp_path):
+    """
+    Only the armbian flow clones its boot medium onto another disk, so only it
+    has two filesystems answering to the same label. Leaving the amd64 loader
+    entry alone keeps the change off a path this could not be tested on.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    populate_extra_tree(
+        _armbian_recipe(distribution="debian", release="bookworm", architecture="amd64"), [], ws)
+    postinst = open(os.path.join(ws, "mkosi.postinst")).read()
+
+    assert "root=LABEL=edgeroot" in postinst
+    assert "root=PARTUUID=" not in postinst
+
+
+def test_provisioning_gives_the_clone_its_own_partuuid():
+    """
+    The image's fixed PARTUUID only distinguishes the media while they differ,
+    and the clone starts life as a byte copy of the card. Provisioning has to
+    re-stamp it and repoint the clone's own loader entry, or the installed
+    system would look for a root that exists only on the card it came from.
+    """
+    script = provision_script()
+
+    assert "edge_rk3588_reidentify" in script
+    assert "sfdisk --part-uuid" in script
+    assert "/proc/sys/kernel/random/uuid" in script
+    assert "root=PARTUUID=$new_uuid" in script
+
+    # Ordering: re-stamping has to happen before the marker is written, or a
+    # crash in between would leave a clone advertised as provisioned while
+    # still carrying the card's identity.
+    assert script.index("edge_rk3588_reidentify \"$target\"") < script.index("edge_rk3588_individualize \"$target\"")
+
+    # Labels stay: the platform on the installed system addresses its
+    # filesystems by them.
+    assert "e2label" not in script
+    assert "fatlabel" not in script
+
+
+def test_growfs_never_ships_on_armbian(tmp_path):
+    """
+    Real corruption, caught on hardware: mkosi.extra is never wiped between
+    builds, so an edge-growfs unit written by an earlier non-armbian run of the
+    same workspace kept shipping. growfs.sh targets the boot disk -- which on
+    this board is the card -- and "sfdisk --relocate gpt-bak-std" rewrote the
+    card's GPT header to point at the end of the physical card while leaving
+    the partition entry array where it was. Linux discards a table whose
+    checksum does not match, so the card came up with no partitions at all.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    ws = str(tmp_path)
+    systemd_dir = os.path.join(ws, "mkosi.extra", "etc", "systemd", "system")
+    wants_dir = os.path.join(systemd_dir, "multi-user.target.wants")
+    os.makedirs(wants_dir, exist_ok=True)
+
+    # Leftovers exactly as a previous build of this workspace would have left.
+    stale_unit = os.path.join(systemd_dir, "edge-growfs.service")
+    with open(stale_unit, "w") as f:
+        f.write("[Unit]\nDescription=stale\n")
+    os.symlink("/etc/systemd/system/edge-growfs.service",
+               os.path.join(wants_dir, "edge-growfs.service"))
+
+    populate_extra_tree(_armbian_recipe(), [], ws)
+
+    assert not os.path.exists(stale_unit)
+    assert not os.path.islink(os.path.join(wants_dir, "edge-growfs.service"))
+    assert not os.path.exists(os.path.join(ws, "mkosi.extra", "opt", "edge", "bin", "growfs.sh"))
+
+
+def test_wait_online_releases_on_the_first_link():
+    """
+    systemd-networkd-wait-online waits for every managed link by default. With
+    only one of the board's two NICs patched it sat in "activating" until its
+    120 s timeout, holding network-online.target down -- and edge-firstboot is
+    ordered after that target, so hostname, interface naming and the NVMe clone
+    all waited two minutes for a network none of them use. Measured on hardware.
+    """
+    import os
+
+    from core.workspace import populate_extra_tree
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as ws:
+        populate_extra_tree(_armbian_recipe(), [], ws)
+        drop_in = os.path.join(
+            ws, "mkosi.extra", "etc", "systemd", "system",
+            "systemd-networkd-wait-online.service.d", "10-edge-any-interface.conf")
+        assert os.path.exists(drop_in)
+        content = open(drop_in).read()
+        # The reset line is mandatory: without an empty ExecStart= first,
+        # systemd appends and the original all-interfaces wait still runs.
+        assert "ExecStart=\n" in content
+        assert "--any" in content
+
+
+def test_gpt_entry_array_is_mirrored_where_card_writers_look_for_it(tmp_path):
+    """
+    Real corruption, measured on a card written by Raspberry Pi Imager and
+    never booted from: the writer relocates the backup GPT onto the physical
+    card and in the same pass moves PartitionEntryLBA from 2 to
+    FirstUsableLBA - 32, recomputing the header checksum but leaving the 16 KB
+    array behind. The stored entry-array CRC then describes bytes nobody wrote
+    -- U-Boot reported the checksum of 16384 zeroes -- and Linux discarded the
+    table, so the card enumerated no partitions at all.
+    """
+    import struct
+
+    from core.rk3588 import mirror_gpt_entry_array
+
+    sector = 512
+    first_usable = 2048
+    count, size = 128, 128
+    array_bytes = count * size
+    sectors = array_bytes // sector
+
+    img = tmp_path / "disk.raw"
+    with open(img, "wb") as f:
+        f.write(b"\0" * (sector * 4096))
+
+    header = bytearray(92)
+    header[0:8] = b"EFI PART"
+    struct.pack_into("<Q", header, 40, first_usable)
+    struct.pack_into("<Q", header, 72, 2)
+    struct.pack_into("<I", header, 80, count)
+    struct.pack_into("<I", header, 84, size)
+
+    array = bytes(range(256)) * (array_bytes // 256)
+    with open(img, "r+b") as f:
+        f.seek(sector)
+        f.write(header)
+        f.seek(2 * sector)
+        f.write(array)
+
+    assert mirror_gpt_entry_array(str(img), log=lambda *_: None) is True
+
+    mirror_lba = first_usable - sectors
+    with open(img, "rb") as f:
+        f.seek(mirror_lba * sector)
+        assert f.read(array_bytes) == array
+        # The header must be left exactly as it was: a writer that does not
+        # relocate anything has to see the image it was handed.
+        f.seek(sector)
+        assert struct.unpack_from("<Q", f.read(92), 72)[0] == 2
+
+
+def test_mirroring_refuses_to_overwrite_occupied_space(tmp_path):
+    """
+    The mirror lands in the gap between the bootloader and the first partition.
+    On RK3588 that gap also holds idbloader (from sector 64), so anything but
+    untouched zeroes there means the layout is not what this assumed -- and
+    writing would break the boot chain rather than fix the table.
+    """
+    import struct
+
+    from core.rk3588 import mirror_gpt_entry_array
+
+    sector = 512
+    first_usable = 2048
+    count, size = 128, 128
+    array_bytes = count * size
+
+    img = tmp_path / "disk.raw"
+    with open(img, "wb") as f:
+        f.write(b"\0" * (sector * 4096))
+
+    header = bytearray(92)
+    header[0:8] = b"EFI PART"
+    struct.pack_into("<Q", header, 40, first_usable)
+    struct.pack_into("<Q", header, 72, 2)
+    struct.pack_into("<I", header, 80, count)
+    struct.pack_into("<I", header, 84, size)
+
+    with open(img, "r+b") as f:
+        f.seek(sector)
+        f.write(header)
+        f.seek(2 * sector)
+        f.write(b"\xab" * array_bytes)
+        # Something already occupies the destination.
+        f.seek((first_usable - array_bytes // sector) * sector)
+        f.write(b"\x01")
+
+    assert mirror_gpt_entry_array(str(img), log=lambda *_: None) is False
+
+
+def test_mirroring_is_a_noop_without_a_gpt(tmp_path):
+    from core.rk3588 import mirror_gpt_entry_array
+
+    img = tmp_path / "empty.raw"
+    with open(img, "wb") as f:
+        f.write(b"\0" * (512 * 64))
+    assert mirror_gpt_entry_array(str(img), log=lambda *_: None) is False

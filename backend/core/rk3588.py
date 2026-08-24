@@ -13,6 +13,7 @@ business, and duplicating them here would mean drifting from upstream one day.
 """
 
 import os
+import struct
 
 # The marker has to live on the clone's ROOT filesystem. /var/opt/edge is a
 # partition of its own (LABEL=edgestor), so writing there through the mounted
@@ -161,6 +162,7 @@ edge_rk3588_provision() {{
   fi
 
   edge_rk3588_write_spi
+  edge_rk3588_reidentify "$target" "$mnt"
   edge_rk3588_individualize "$target" "$mnt" "$marker"
 
   # Interface names are bound to this board's MACs and would match nothing on
@@ -255,6 +257,69 @@ edge_rk3588_write_spi() {{
 # The clone has to differ from the original before it ever boots: identical
 # machine-ids and SSH keys across the fleet mean broken DHCP leases and a
 # meaningless host authenticity check.
+# dd hands the clone every identifier the card has -- label, filesystem UUID
+# and PARTUUID alike. The image boots by PARTUUID (see IMAGE_ROOT_PARTUUID in
+# core/workspace.py) precisely so the two media can be told apart, which only
+# holds while the values differ. So the clone gets a fresh PARTUUID here, and
+# its own loader entry is rewritten to match, before it is ever booted.
+#
+# Labels are deliberately untouched: the platform running on the installed
+# system addresses its filesystems by them.
+#
+# Failing to do this is not fatal on its own -- it becomes fatal the moment a
+# card is inserted into a provisioned board, which is the normal way of
+# testing a new image -- so every step is reported rather than swallowed.
+edge_rk3588_reidentify() {{
+  local target="$1" mnt="$2"
+  local rootpart="" esp="" partnum new_uuid part
+
+  for part in $(lsblk -lno NAME "$target" | tail -n +2); do
+    case "$(blkid -o value -s LABEL "/dev/$part" 2>/dev/null)" in
+      edgeroot) rootpart="/dev/$part" ;;
+      EDGEBOOT|edgeboot) esp="/dev/$part" ;;
+    esac
+  done
+
+  if [ -z "$rootpart" ]; then
+    echo "[PROVISION] WARNING: no edgeroot partition on $target -- clone keeps the card's PARTUUID."
+    return 0
+  fi
+
+  new_uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
+  if [ -z "$new_uuid" ]; then
+    echo "[PROVISION] WARNING: could not generate a UUID -- clone keeps the card's PARTUUID."
+    return 0
+  fi
+
+  partnum="$(echo "$rootpart" | grep -o '[0-9]*$')"
+  if ! sfdisk --part-uuid "$target" "$partnum" "$new_uuid" >/dev/null 2>&1; then
+    echo "[PROVISION] WARNING: could not set a new PARTUUID on $rootpart."
+    return 0
+  fi
+  partx -u "$target" >/dev/null 2>&1 || partprobe "$target" >/dev/null 2>&1 || true
+  udevadm settle >/dev/null 2>&1 || true
+  echo "[PROVISION] Clone root PARTUUID -> $new_uuid"
+
+  # The loader entry still names the card's PARTUUID; left alone, the clone
+  # would look for a root that only exists on the card it came from.
+  if [ -z "$esp" ]; then
+    echo "[PROVISION] WARNING: no EDGEBOOT partition on $target -- loader entry not updated."
+    return 0
+  fi
+  if ! mount "$esp" "$mnt" 2>/dev/null; then
+    echo "[PROVISION] WARNING: could not mount $esp -- loader entry not updated."
+    return 0
+  fi
+  if [ -f "$mnt/extlinux/extlinux.conf" ]; then
+    sed -i "s|root=PARTUUID=[0-9a-fA-F-]*|root=PARTUUID=$new_uuid|" "$mnt/extlinux/extlinux.conf"
+    echo "[PROVISION] Clone extlinux.conf now boots PARTUUID=$new_uuid"
+  else
+    echo "[PROVISION] WARNING: $esp carries no extlinux/extlinux.conf."
+  fi
+  sync
+  umount "$mnt"
+}}
+
 edge_rk3588_individualize() {{
   local target="$1" mnt="$2" marker="$3"
   local rootpart=""
@@ -293,6 +358,76 @@ edge_rk3588_individualize() {{
 
 edge_rk3588_provision
 """
+
+
+_GPT_SECTOR = 512
+
+
+def mirror_gpt_entry_array(raw_path: str, log=print) -> bool:
+    """
+    Places a second copy of the GPT partition entry array where card-writing
+    tools expect to find it after they expand the table onto the physical card.
+
+    Measured on a card written by Raspberry Pi Imager and never booted from:
+    the writer relocates the backup GPT to the end of the card -- legitimate in
+    itself -- and in the same pass moves PartitionEntryLBA in the primary
+    header from 2 to FirstUsableLBA - 32 (2016 for our layout), recomputing the
+    header's own checksum but NOT moving the 16 KB array. The stored entry
+    array CRC then describes bytes nobody wrote: U-Boot reported the checksum
+    of 16384 zeroes and fell back to the backup table, while Linux discarded
+    the table outright and the card came up with no partitions at all.
+
+    Writing an identical copy at that address makes the pointer land on valid
+    data whichever of the two places it names. Only the gap between the
+    bootloader and the first partition is touched, and only where the image
+    already holds zeroes -- the header itself is left alone, so a writer that
+    does not do this sees exactly the image it was given.
+    """
+    try:
+        with open(raw_path, "r+b") as img:
+            img.seek(_GPT_SECTOR)
+            header = img.read(92)
+            if header[0:8] != b"EFI PART":
+                log("[RK3588] No GPT header in the image -- entry array not mirrored.")
+                return False
+
+            first_usable = struct.unpack_from("<Q", header, 40)[0]
+            entry_lba = struct.unpack_from("<Q", header, 72)[0]
+            count = struct.unpack_from("<I", header, 80)[0]
+            size = struct.unpack_from("<I", header, 84)[0]
+            array_bytes = count * size
+            sectors = (array_bytes + _GPT_SECTOR - 1) // _GPT_SECTOR
+            mirror_lba = first_usable - sectors
+
+            # Nothing to do when the array already sits where the writer would
+            # put it, and never write over the array itself or over anything
+            # the bootloader occupies at the start of the medium.
+            if mirror_lba <= entry_lba + sectors - 1 or mirror_lba + sectors > first_usable:
+                log(f"[RK3588] GPT entry array at LBA {entry_lba} needs no mirror.")
+                return False
+
+            img.seek(entry_lba * _GPT_SECTOR)
+            array = img.read(array_bytes)
+            if len(array) != array_bytes:
+                log("[RK3588] Short read of the GPT entry array -- not mirrored.")
+                return False
+
+            img.seek(mirror_lba * _GPT_SECTOR)
+            existing = img.read(array_bytes)
+            if existing.strip(b"\0"):
+                log(f"[RK3588] LBA {mirror_lba} is not free -- GPT entry array not mirrored.")
+                return False
+
+            img.seek(mirror_lba * _GPT_SECTOR)
+            img.write(array)
+            img.flush()
+            os.fsync(img.fileno())
+
+        log(f"[RK3588] GPT entry array mirrored to LBA {mirror_lba} for card writers that relocate it.")
+        return True
+    except OSError as exc:
+        log(f"[RK3588] Could not mirror the GPT entry array: {exc}")
+        return False
 
 
 def write_bootloader_into_image(raw_path: str, log=print) -> bool:
@@ -379,6 +514,7 @@ def write_bootloader_into_image(raw_path: str, log=print) -> bool:
             return False
 
         log("[RK3588] Bootloader written into the image via Armbian's own script -- image is bootable.")
+        mirror_gpt_entry_array(raw_path, log=log)
         return True
     finally:
         shutil.rmtree(staging, ignore_errors=True)

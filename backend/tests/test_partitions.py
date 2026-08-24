@@ -87,3 +87,23 @@ def test_unbounded_root_is_still_minimized(tmp_path, monkeypatch):
     root = _conf_for(confs, "edgeroot")
     assert "Minimize=guess" in root
     assert "SizeMaxBytes" not in root
+
+
+def test_extra_partition_mountpoints_exist_in_the_rootfs():
+    """
+    A generic partition is filled with CopyFiles=<mountpoint>, and the same
+    path is where fstab mounts it on the running board. Nothing else in the
+    build creates those directories: for a recipe whose packages never touch
+    /var/opt/edge, repart logged "Failed to open source file
+    '/buildroot/var/opt/edge', skipping" and the image shipped without the
+    mount point at all.
+    """
+    recipe = make_recipe(distribution="debian", release="bookworm", partitions=[])
+    ws = prepare_workspace(9101, recipe)
+
+    for mountpoint in ("var/log/edge", "var/opt/edge"):
+        assert os.path.isdir(os.path.join(ws, "mkosi.extra", mountpoint)), mountpoint
+
+    # The root partition copies "/" wholesale -- it must not get a directory
+    # of its own carved out under mkosi.extra.
+    assert not os.path.exists(os.path.join(ws, "mkosi.extra", "mkosi.extra"))

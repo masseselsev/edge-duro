@@ -55,7 +55,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in">
       <div className="w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl space-y-4 animate-modal-in">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
           <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
@@ -83,7 +83,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none transition-all duration-200"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden transition-all duration-200"
               placeholder="e.g. John Doe"
             />
           </div>
@@ -97,7 +97,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
                 type="text"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none transition-all duration-200 font-mono"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden transition-all duration-200 font-mono"
                 placeholder="e.g. +79991234567"
               />
             </div>
@@ -109,7 +109,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
                 type="text"
                 value={telegramId}
                 onChange={(e) => setTelegramId(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none transition-all duration-200 font-mono"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden transition-all duration-200 font-mono"
                 placeholder="e.g. username"
               />
             </div>
@@ -123,7 +123,7 @@ export default function ProfileModal({ currentUser, onClose, onUpdateSuccess }: 
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none transition-all duration-200"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden transition-all duration-200"
               placeholder={t('adminPasswordHint')}
             />
           </div>

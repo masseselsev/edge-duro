@@ -1,18 +1,21 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
       POSTGRES_DB: ${POSTGRES_DB:-duro_image_builder}
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      # 18+ stores the cluster in a major-version subdirectory and treats a
+      # mount at the old /var/lib/postgresql/data as a legacy data location,
+      # refusing to start. The mount point moves up one level accordingly.
+      - pg-data:/var/lib/postgresql
     ports:
       - "5433:5432"
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: always
     ports:
       - "6380:6379"
@@ -105,8 +108,14 @@ services:
     dns_search: "."
 
 volumes:
+  # Named per PostgreSQL major on purpose. A data directory belongs to the
+  # major that created it -- an 18 server refuses to start on a 15 cluster --
+  # so reusing one name across an upgrade turns "docker compose up" into a
+  # container that crash-loops with no obvious cause. Carrying the major in
+  # the name makes the upgrade an explicit step (dump, switch, restore) and
+  # leaves the previous cluster in place to roll back to.
   pg-data:
-    name: edge-duro_pg-data
+    name: edge-duro_pg-data-18
   redis-data:
     name: edge-duro_redis-data
   duro-workspace:

@@ -8,11 +8,22 @@ Beyond generic amd64 images, recipes can target specific arm64 single-board comp
 
 ## 🏗️ Architecture & Tech Stack
 
-- **Backend:** Python 3.13, FastAPI, SQLAlchemy 2.0, Alembic, Celery, Redis, SSE log streaming.
-- **Frontend:** React 19, TypeScript, Tailwind CSS 3, CodeMirror 6, Lucide Icons, Vite 8.
-- **Database:** PostgreSQL 15.
+- **Backend:** Python 3.14, FastAPI, SQLAlchemy 2.0, Alembic, Celery, SSE log streaming.
+- **Frontend:** React 19, TypeScript 6, Tailwind CSS 4, CodeMirror 6, Lucide Icons, Vite 8 (built on Node 24 LTS).
+- **Database:** PostgreSQL 18.
+- **Broker & log bus:** Redis 8.
 - **Task Runner:** Celery Worker in privileged mode for `mkosi` systemd-nspawn build execution.
-- **Deployment:** Docker Compose (6 isolated services).
+- **Deployment:** Docker Compose (6 isolated services), served by nginx 1.31.
+
+### Dependency policy
+
+Every dependency has a ceiling, and the same commit resolves to the same versions on every machine:
+
+- **Python** packages are pinned exactly in `backend/requirements.txt`. They used to be open-ended `>=` ranges, so two builds of one commit a week apart could pull different major versions of FastAPI, SQLAlchemy or Pydantic — a breaking release anywhere in that list would have reached production on the next `docker compose up --build`, with nothing in the repository recording the change.
+- **npm** packages keep caret ranges (which already cap the major) and `frontend/package-lock.json` is committed, with the image built by `npm ci` rather than `npm install`, so the lockfile is what actually gets installed.
+- **Base images** are pinned to a major.minor (`postgres:18-alpine`, `redis:8-alpine`, `python:3.14-slim`, `node:24-alpine`, `nginx:1.31-alpine`) — patch and security updates still arrive, major upgrades never happen by accident.
+
+> TypeScript is deliberately held at 6.x: `typescript-eslint` does not support TypeScript 7 yet and refuses to load against it, and a toolchain that cannot lint is a worse trade than a compiler one major behind. Revisit when the plugin catches up.
 
 ---
 
@@ -199,6 +210,34 @@ Navigate to `http://<your-server-ip>:3333` in your web browser.
 Default login:
 - **Username:** `admin` (or `SUPERADMIN_USERNAME` configured in `.env`)
 - **Password:** `q1w2e3r4` (or `ADMIN_PASSWORD` configured in `.env`)
+
+### Upgrading an existing install across a PostgreSQL major
+
+A PostgreSQL data directory belongs to the major version that created it — an 18 server will not start on a 15 cluster. Two things therefore changed with the move to 18, and both are already in `docker-compose.yml`:
+
+- the volume is named per major (`edge-duro_pg-data-18`), so the previous cluster stays on disk to roll back to;
+- the mount point moved from `/var/lib/postgresql/data` to `/var/lib/postgresql`, because 18+ images store the cluster in a version subdirectory and treat the old path as a legacy location and refuse to start.
+
+Dump before switching, then restore into the new cluster:
+
+```bash
+# 1. With the old stack still running, take a full logical backup
+docker exec edge-duro-db-1 pg_dumpall -U postgres > duro-pg-dump.sql
+
+# 2. Bring everything down, pull the new images, start ONLY the database
+#    (starting the backend first would create an empty schema and the
+#     restore would then collide with it)
+docker compose down
+docker compose up -d --build db
+
+# 3. Restore
+docker exec -i edge-duro-db-1 psql -U postgres -q < duro-pg-dump.sql
+
+# 4. Start the rest
+docker compose up -d
+```
+
+Once the new cluster is verified, the old volume can be removed with `docker volume rm edge-duro_pg-data`.
 
 ---
 

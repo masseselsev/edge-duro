@@ -54,7 +54,7 @@ export default function BaseImageSelector({
           type="checkbox"
           checked={ignoreMissingArch}
           onChange={(e) => onIgnoreMissingArchChange(e.target.checked)}
-          className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500/40 cursor-pointer"
+          className="w-3.5 h-3.5 rounded-sm border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500/40 cursor-pointer"
         />
         <FieldLabel
           hint={t('ignoreMissingArchPkgsHint')}

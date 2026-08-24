@@ -235,7 +235,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-4xl max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         
         {/* Header */}
@@ -274,7 +274,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Edge Gateway Debian 12"
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-none"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-hidden"
               />
             </div>
             <div className="space-y-1.5">
@@ -286,7 +286,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional purpose notes..."
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-none"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-hidden"
               />
             </div>
           </div>
@@ -303,7 +303,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               type="checkbox"
               checked={isDev}
               onChange={(e) => setIsDev(e.target.checked)}
-              className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-fuchsia-500 focus:ring-fuchsia-500/20"
+              className="w-4 h-4 mt-0.5 rounded-sm border-zinc-800 bg-zinc-950 text-fuchsia-500 focus:ring-fuchsia-500/20"
             />
             <span className="flex-1">
               <span className={`block text-xs font-bold uppercase tracking-wider ${isDev ? 'text-fuchsia-400' : 'text-zinc-400'}`}>
@@ -359,7 +359,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                       : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center ${outputFormats.includes(fmt.id) ? 'border-amber-500 bg-amber-500 text-zinc-950' : 'border-zinc-700'}`}>
+                  <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${outputFormats.includes(fmt.id) ? 'border-amber-500 bg-amber-500 text-zinc-950' : 'border-zinc-700'}`}>
                     {outputFormats.includes(fmt.id) && <Check size={12} strokeWidth={3} />}
                   </div>
                   <span>{fmt.label}</span>
@@ -412,14 +412,14 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 type="text"
                 value={hostname}
                 onChange={(e) => setHostname(e.target.value.toLowerCase())}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-hidden"
               />
               <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={hostnameFromNetif}
                   onChange={(e) => setHostnameFromNetif(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+                  className="w-4 h-4 rounded-sm border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
                 />
                 <span className="text-[11px] text-zinc-400 font-medium">
                   Set hostname to active installation port MAC address in post-install (lowercase, no delimiters, e.g. <code className="text-amber-400 font-mono">525400123456</code>)
@@ -457,7 +457,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 value={sshKeyInput}
                 onChange={(e) => setSshKeyInput(e.target.value)}
                 placeholder={t('sshKeyPlaceholder')}
-                className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none"
+                className="w-full p-2.5 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-hidden"
               />
             </div>
             <div className="space-y-1.5">
@@ -470,7 +470,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 max={65535}
                 value={sshPort}
                 onChange={(e) => setSshPort(parseInt(e.target.value) || 2222)}
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-hidden"
               />
               <p className="text-[11px] text-zinc-500">{t('sshPortHint')}</p>
             </div>
@@ -483,7 +483,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 type="checkbox"
                 checked={sshPasswordAuth}
                 onChange={(e) => setSshPasswordAuth(e.target.checked)}
-                className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+                className="w-4 h-4 mt-0.5 rounded-sm border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
               />
               <span className="text-[11px] text-zinc-400 font-medium">{t('sshPasswordAuthHint')}</span>
             </label>
@@ -492,7 +492,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 type="checkbox"
                 checked={sshPermitRootLogin}
                 onChange={(e) => setSshPermitRootLogin(e.target.checked)}
-                className="w-4 h-4 mt-0.5 rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
+                className="w-4 h-4 mt-0.5 rounded-sm border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-amber-500/20"
               />
               <span className="text-[11px] text-zinc-400 font-medium">{t('sshRootLoginHint')}</span>
             </label>
@@ -508,7 +508,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               value={dnsServers}
               onChange={(e) => setDnsServers(e.target.value)}
               placeholder="77.88.8.8 1.1.1.1 9.9.9.9 8.8.8.8"
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-hidden"
             />
             <p className="text-[11px] text-zinc-500">{t('dnsServersHint')}</p>
           </div>
@@ -524,7 +524,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
                 value={ifacePrefix}
                 onChange={(e) => setIfacePrefix(e.target.value)}
                 placeholder="edge"
-                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-none"
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-sm font-mono focus:outline-hidden"
               />
               <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800">
                 {[0, 1].map((start) => (
@@ -569,7 +569,7 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
               value={kernelParams}
               onChange={(e) => setKernelParams(e.target.value)}
               placeholder="e.g. ipv6.disable=1 nohz=off"
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-hidden"
             />
           </div>
 

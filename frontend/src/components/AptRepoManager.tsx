@@ -66,7 +66,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                   title={t('repoNameHint') || 'Label only, used to identify this repo in the picker and logs. Not part of the APT source itself.'}
                   value={repo.name}
                   onChange={(e) => handleUpdate(idx, 'name', e.target.value)}
-                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono"
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-sm text-xs text-zinc-100 font-mono"
                 />
                 <input
                   type="text"
@@ -74,7 +74,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                   title={t('repoUrlHint') || 'Base repository URL, e.g. https://edge.vitcompany.com/repo/bookworm/stable'}
                   value={repo.url}
                   onChange={(e) => handleUpdate(idx, 'url', e.target.value)}
-                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono sm:col-span-2"
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-sm text-xs text-zinc-100 font-mono sm:col-span-2"
                 />
                 <div className="flex items-center gap-2">
                   <input
@@ -83,7 +83,7 @@ export default function AptRepoManager({ repositories, onChange }: AptRepoManage
                     title={t('repoSuiteHint') || "Suite/codename, e.g. bookworm or resolute. Leave empty to fall back to this recipe's Release."}
                     value={repo.suite}
                     onChange={(e) => handleUpdate(idx, 'suite', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono"
+                    className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-sm text-xs text-zinc-100 font-mono"
                   />
                   <button
                     type="button"

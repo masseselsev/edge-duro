@@ -214,7 +214,7 @@ export default function BuildsTab() {
                   setPage(1);
                   saveLimit('builds', val);
                 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-zinc-700 cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>

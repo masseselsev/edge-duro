@@ -154,7 +154,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   }, [buildId]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 animate-fade-in">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div className="w-full max-w-5xl h-[85vh] bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         
         {/* Header */}
@@ -166,7 +166,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-bold text-zinc-100 break-words">
+                  <h3 className="text-sm font-bold text-zinc-100 wrap-break-word">
                     Build Console — {recipeName || buildId.slice(0, 8)}
                   </h3>
                   <span className={`shrink-0 flex items-center gap-1.5 text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${
@@ -277,7 +277,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
                 key={i}
                 style={{ contentVisibility: 'auto', containIntrinsicSize: '0 20px' }}
                 className={
-                  line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded' :
+                  line.includes('[ERROR]') || line.includes('[FATAL') ? 'text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-sm' :
                   line.includes('[STEP') || line.includes('[SYSTEM') || line.includes('[ISO SUCCESS]') ? 'text-amber-400 font-bold' :
                   line.includes('[EXEC]') || line.includes('[ISO EXEC]') ? 'text-cyan-400' : 'text-zinc-300'
                 }

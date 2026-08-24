@@ -17,7 +17,7 @@ export default function RecipeViewerModal({ recipe, onClose }: RecipeViewerModal
   const standardPackages = (recipe.packages || []).filter((p: string) => !p.startsWith('edge-'));
 
   const modalContent = (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-md animate-fade-in">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-in">
         
         {/* Header */}
@@ -120,7 +120,7 @@ export default function RecipeViewerModal({ recipe, onClose }: RecipeViewerModal
                 {standardPackages.map((pkg: string) => (
                   <span
                     key={pkg}
-                    className="px-2 py-0.5 bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 rounded font-mono text-[11px]"
+                    className="px-2 py-0.5 bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 rounded-sm font-mono text-[11px]"
                   >
                     {pkg}
                   </span>

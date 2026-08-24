@@ -30,7 +30,7 @@ export default function ScriptManager({ postinstScript, onChange }: ScriptManage
         onChange={(e) => onChange(e.target.value)}
         rows={5}
         placeholder={`#!/bin/bash\n# Custom commands to run inside rootfs chroot during build phase\nsystemctl enable nginx\nuseradd -m -s /bin/bash edgeadmin`}
-        className="w-full p-3 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-none leading-relaxed"
+        className="w-full p-3 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-xs font-mono text-zinc-100 focus:outline-hidden leading-relaxed"
       />
     </div>
   );

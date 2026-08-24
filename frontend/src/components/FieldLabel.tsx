@@ -16,7 +16,7 @@ interface FieldLabelProps {
 // Uppercase field label with an optional (i) hover hint explaining exact
 // input format (newline vs comma separated, what the value affects at build
 // time, etc). Uses the native title attribute rather than a custom tooltip
-// so it stays correct inside modals with backdrop-blur / z-index stacking
+// so it stays correct inside modals with backdrop-blur-sm / z-index stacking
 // without extra positioning logic.
 export default function FieldLabel({ children, hint, className, colorClassName }: FieldLabelProps) {
   return (

@@ -178,7 +178,7 @@ export default function LogsTab() {
                     <tr key={log.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-2.5 px-4 text-zinc-400 whitespace-nowrap">{new Date(log.created_at).toLocaleString()}</td>
                       <td className="py-2.5 px-4 text-amber-400 font-bold">{log.username}</td>
-                      <td className="py-2.5 px-4"><span className="bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded text-[10px]">{log.action}</span></td>
+                      <td className="py-2.5 px-4"><span className="bg-zinc-800 text-zinc-200 px-2 py-0.5 rounded-sm text-[10px]">{log.action}</span></td>
                       <td className="py-2.5 px-4 text-zinc-300 font-sans">{log.details || '—'}</td>
                       <td className="py-2.5 px-4 text-zinc-400">{log.ip_address || '—'}</td>
                     </tr>
@@ -208,7 +208,7 @@ export default function LogsTab() {
                   setPage(1);
                   saveLimit(`logs_${subTab}`, val);
                 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-zinc-700 cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>

@@ -120,7 +120,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
                 }
               }}
               placeholder={t('edgePackagePlaceholder') || 'Add Edge package (e.g. edge-base, edge-target-tools)...'}
-              className="w-full pl-9 pr-3 py-2 bg-zinc-900/80 border border-cyan-500/20 focus:border-cyan-400 rounded-lg text-zinc-100 text-sm focus:outline-none placeholder-zinc-500 font-mono"
+              className="w-full pl-9 pr-3 py-2 bg-zinc-900/80 border border-cyan-500/20 focus:border-cyan-400 rounded-lg text-zinc-100 text-sm focus:outline-hidden placeholder-zinc-500 font-mono"
             />
           </div>
           <button
@@ -141,7 +141,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
             edgePackages.map((pkg) => (
               <span
                 key={pkg}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-bold shadow-sm"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-bold shadow-xs"
               >
                 <span>{pkg}</span>
                 <button
@@ -164,7 +164,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
               key={s}
               type="button"
               onClick={() => handleAddEdge(s)}
-              className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/20 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
+              className="text-[10px] font-mono px-2 py-0.5 rounded-sm bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/20 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
             >
               + {s}
             </button>
@@ -216,7 +216,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
                 }
               }}
               placeholder={t('packagePlaceholder')}
-              className="w-full pl-9 pr-3 py-2 bg-zinc-900/80 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none font-mono"
+              className="w-full pl-9 pr-3 py-2 bg-zinc-900/80 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden font-mono"
             />
           </div>
           <button
@@ -260,7 +260,7 @@ export default function PackageSelector({ packages, onChange }: PackageSelectorP
               key={s}
               type="button"
               onClick={() => handleAddStd(s)}
-              className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              className="text-[10px] font-mono px-2 py-0.5 rounded-sm bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
             >
               + {s}
             </button>

@@ -211,10 +211,10 @@ function AppContent() {
               </div>
               <div>
                 <h1 className="text-sm font-bold text-zinc-50 tracking-tight leading-none flex items-center gap-1.5">
-                  <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-bold text-[11px] uppercase tracking-wider">
+                  <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded-sm font-mono font-bold text-[11px] uppercase tracking-wider">
                     {t('appName')}
                   </span>
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono font-bold">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-sm font-mono font-bold">
                     {appVersion}
                   </span>
                 </h1>
@@ -226,7 +226,7 @@ function AppContent() {
 
             {/* Center: Server Metrics Widget */}
             {metrics && (
-              <div className="flex-shrink-0 flex items-center gap-2.5 bg-zinc-950/40 border border-zinc-800/60 rounded-xl px-2.5 py-1 shadow-inner">
+              <div className="shrink-0 flex items-center gap-2.5 bg-zinc-950/40 border border-zinc-800/60 rounded-xl px-2.5 py-1 shadow-inner">
                 <div className="flex items-center gap-1" title="CPU Utilization">
                   <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold font-mono">CPU</span>
                   <span className="text-[10px] font-mono font-semibold text-emerald-400">
@@ -270,7 +270,7 @@ function AppContent() {
                 <div className="relative" ref={profileDropdownRef}>
                   <button
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 font-bold transition-all cursor-pointer outline-none"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 font-bold transition-all cursor-pointer outline-hidden"
                   >
                     <User size={12} className="text-zinc-400" />
                     <span>{currentUser.name || currentUser.username}</span>
@@ -320,7 +320,7 @@ function AppContent() {
                 onClick={() => setActiveTab('recipes')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                   activeTab === 'recipes'
-                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-xs border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -331,7 +331,7 @@ function AppContent() {
                 onClick={() => setActiveTab('builds')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                   activeTab === 'builds'
-                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-xs border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -342,7 +342,7 @@ function AppContent() {
                 onClick={() => setActiveTab('storage')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                   activeTab === 'storage'
-                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-xs border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -353,7 +353,7 @@ function AppContent() {
                 onClick={() => setActiveTab('logs')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                   activeTab === 'logs'
-                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-xs border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >
@@ -364,7 +364,7 @@ function AppContent() {
                 onClick={() => setActiveTab('settings')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                   activeTab === 'settings'
-                    ? 'bg-zinc-900 text-zinc-100 shadow-sm border border-zinc-800'
+                    ? 'bg-zinc-900 text-zinc-100 shadow-xs border border-zinc-800'
                     : 'text-zinc-400 hover:text-zinc-100'
                 }`}
               >

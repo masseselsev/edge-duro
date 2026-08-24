@@ -113,7 +113,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
                 type="text"
                 value={part.mountpoint}
                 onChange={(e) => handleUpdatePartition(index, 'mountpoint', e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 placeholder="/"
               />
             </div>
@@ -129,7 +129,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
               <select
                 value={part.type}
                 onChange={(e) => handleUpdatePartition(index, 'type', e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer"
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 cursor-pointer"
               >
                 <option value="esp">ESP (EFI)</option>
                 <option value="root">Root (/)</option>
@@ -149,7 +149,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
               <select
                 value={part.filesystem}
                 onChange={(e) => handleUpdatePartition(index, 'filesystem', e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer font-mono"
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 cursor-pointer font-mono"
               >
                 <option value="ext4">ext4</option>
                 <option value="vfat">vfat</option>
@@ -171,7 +171,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
                 type="text"
                 value={part.size}
                 onChange={(e) => handleUpdatePartition(index, 'size', e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 placeholder="2G / max"
               />
             </div>
@@ -188,7 +188,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
                 type="text"
                 value={part.label || ''}
                 onChange={(e) => handleUpdatePartition(index, 'label', e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 placeholder="edgeroot"
               />
             </div>
@@ -222,13 +222,13 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             onChange={(e) => setNewMount(e.target.value)}
             placeholder="/var/custom"
             title="Mount point for the new partition, e.g. /var/custom"
-            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
           />
 
           <select
             value={newType}
             onChange={(e) => setNewType(e.target.value)}
-            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer"
+            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 cursor-pointer"
           >
             <option value="generic">Data (generic)</option>
             <option value="root">Root (/)</option>
@@ -239,7 +239,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
           <select
             value={newFs}
             onChange={(e) => setNewFs(e.target.value)}
-            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer font-mono"
+            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 cursor-pointer font-mono"
           >
             <option value="ext4">ext4</option>
             <option value="vfat">vfat</option>
@@ -254,7 +254,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             onChange={(e) => setNewSize(e.target.value)}
             placeholder="1G / max"
             title='Size, e.g. 1G. "max" only makes sense on the last partition.'
-            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
           />
 
           <input
@@ -263,7 +263,7 @@ export default function PartitionEditor({ partitions, onChange }: PartitionEdito
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="Label (optional)"
             title="Filesystem label, referenced by fstab and the boot entry. Must be unique on the disk."
-            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
           />
         </div>
 

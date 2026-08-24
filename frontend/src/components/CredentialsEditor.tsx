@@ -103,7 +103,7 @@ export default function CredentialsEditor({
           placeholder={t('rootPasswordPlaceholder') || 'Leave empty to keep root locked'}
           autoComplete="off"
           spellCheck={false}
-          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
+          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-hidden"
         />
         {!rootPassword && (
           <p className="flex items-start gap-1.5 text-[11px] text-amber-500/80">
@@ -138,7 +138,7 @@ export default function CredentialsEditor({
                   type="text"
                   value={user.username}
                   onChange={(e) => handleUpdateUser(index, 'username', e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 />
               </div>
 
@@ -158,7 +158,7 @@ export default function CredentialsEditor({
                   onChange={(e) => handleUpdateUser(index, 'password', e.target.value)}
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 />
               </div>
 
@@ -183,7 +183,7 @@ export default function CredentialsEditor({
                     )
                   }
                   placeholder="sudo,video"
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
                 />
               </div>
 
@@ -194,7 +194,7 @@ export default function CredentialsEditor({
                 <select
                   value={user.shell || '/bin/bash'}
                   onChange={(e) => handleUpdateUser(index, 'shell', e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer font-mono"
+                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 cursor-pointer font-mono"
                 >
                   {SHELLS.map((s) => (
                     <option key={s} value={s}>
@@ -227,7 +227,7 @@ export default function CredentialsEditor({
                     type="checkbox"
                     checked={(user.groups || []).includes('sudo')}
                     onChange={(e) => handleToggleSudo(index, e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
+                    className="w-4 h-4 rounded-sm border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
                   />
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="text-[11px] text-zinc-300 font-medium">
@@ -258,7 +258,7 @@ export default function CredentialsEditor({
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               placeholder="user"
-              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
             />
           </div>
           <div className="sm:col-span-5">
@@ -271,7 +271,7 @@ export default function CredentialsEditor({
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="off"
               spellCheck={false}
-              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-sky-500 font-mono"
             />
           </div>
           <div className="sm:col-span-3">
@@ -297,7 +297,7 @@ export default function CredentialsEditor({
                 type="checkbox"
                 checked={newIsSudo}
                 onChange={(e) => setNewIsSudo(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
+                className="w-4 h-4 rounded-sm border-zinc-800 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/20"
               />
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-[11px] text-zinc-300 font-medium">

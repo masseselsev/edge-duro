@@ -120,7 +120,7 @@ export default function RepoBrowserModal({
   const currentRepoLabel = (r: RepoRef) => r.name || r.url || 'repository';
 
   return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-10000 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-5xl h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
 
         {/* Header */}
@@ -175,7 +175,7 @@ export default function RepoBrowserModal({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('searchPackages') || 'Search packages by name or description...'}
-              className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-none"
+              className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-cyan-500 rounded-xl text-zinc-100 text-xs font-mono focus:outline-hidden"
             />
           </div>
           <button
@@ -252,14 +252,14 @@ export default function RepoBrowserModal({
                 <div key={p.name} className="border-b border-zinc-800/60 last:border-0">
                   <div
                     className={`flex items-start gap-3 px-3 py-2 hover:bg-zinc-900/60 transition-colors ${
-                      isPicked ? 'bg-cyan-500/[0.06]' : ''
+                      isPicked ? 'bg-cyan-500/6' : ''
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={isPicked}
                       onChange={() => togglePackage(p.name)}
-                      className="mt-0.5 w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-cyan-500 focus:ring-cyan-500/20 cursor-pointer"
+                      className="mt-0.5 w-4 h-4 rounded-sm border-zinc-800 bg-zinc-950 text-cyan-500 focus:ring-cyan-500/20 cursor-pointer"
                     />
                     <button
                       type="button"

@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc libpq-dev curl \
     mkosi systemd-container debootstrap \

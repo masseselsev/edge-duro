@@ -1,14 +1,26 @@
-fastapi>=0.110.0
-python-multipart>=0.0.9
-uvicorn[standard]>=0.28.0
-sqlalchemy>=2.0.28
-psycopg2-binary>=2.9.10
-alembic>=1.13.1
-celery>=5.3.6
-redis>=5.0.3
-pydantic>=2.9.2
-pydantic-settings>=2.5.0
-pyjwt>=2.8.0
-passlib[bcrypt]>=1.7.4
-httpx>=0.28.1
-sse-starlette>=1.6.5
+# Pinned exactly, on purpose. These were ">=" ranges with no upper bound, so
+# two builds of the same commit a week apart could resolve to different major
+# versions of any of them -- a breaking release anywhere in this list would
+# have landed in production on the next "docker compose up --build", with
+# nothing in the repository recording what changed. Bump deliberately, and let
+# the test suite prove the bump.
+fastapi==0.141.1
+python-multipart==0.0.32
+uvicorn[standard]==0.52.4
+sqlalchemy==2.0.52
+psycopg2-binary==2.9.12
+alembic==1.19.1
+celery==5.6.3
+redis==8.1.0
+pydantic==2.13.4
+pydantic-settings==2.15.0
+pyjwt==2.13.0
+passlib[bcrypt]==1.7.4
+# passlib pulls bcrypt through its extra but puts no ceiling on it, which is
+# the same hole one level down.
+bcrypt==5.0.0
+httpx==0.28.1
+sse-starlette==3.4.8
+# Test-only, but installed in the image so the suite can run against exactly
+# the dependency set that ships.
+pytest==9.1.1

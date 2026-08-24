@@ -85,7 +85,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 disabled={loading}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-none transition-all duration-200"
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-hidden transition-all duration-200"
                 placeholder="e.g. admin"
               />
             </div>
@@ -106,7 +106,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-none transition-all duration-200"
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 focus:border-amber-500 rounded-xl text-zinc-100 text-sm focus:outline-hidden transition-all duration-200"
                 placeholder="••••••••"
               />
             </div>

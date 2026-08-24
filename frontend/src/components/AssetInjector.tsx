@@ -77,7 +77,7 @@ export default function AssetInjector({ recipeId, assets, onUpload, onDelete }: 
             t('targetPathHint') ||
             'Destination path inside the built image, e.g. /etc/custom.conf. Leave empty to place the file under /opt/custom/<filename> instead.'
           }
-          className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-100 font-mono focus:border-amber-500"
+          className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-sm text-xs text-zinc-100 font-mono focus:border-amber-500"
         />
         <label
           title={
@@ -90,7 +90,7 @@ export default function AssetInjector({ recipeId, assets, onUpload, onDelete }: 
             type="checkbox"
             checked={isPostinst}
             onChange={(e) => setIsPostinst(e.target.checked)}
-            className="rounded border-zinc-800 text-amber-500 focus:ring-amber-500 bg-zinc-900"
+            className="rounded-sm border-zinc-800 text-amber-500 focus:ring-amber-500 bg-zinc-900"
           />
           <span>{t('postInstall')}</span>
         </label>

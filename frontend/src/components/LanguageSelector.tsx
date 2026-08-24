@@ -41,7 +41,7 @@ export default function LanguageSelector() {
 
   const flags: Record<Language, React.ReactNode> = {
     en: (
-      <svg className="w-5 h-3.5 rounded-sm shadow-sm inline-block" viewBox="0 0 60 30" style={{verticalAlign: 'middle'}}>
+      <svg className="w-5 h-3.5 rounded-xs shadow-xs inline-block" viewBox="0 0 60 30" style={{verticalAlign: 'middle'}}>
         <rect width="60" height="30" fill="#012169"/>
         <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" strokeWidth="6"/>
         <path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" strokeWidth="4"/>
@@ -50,14 +50,14 @@ export default function LanguageSelector() {
       </svg>
     ),
     ru: (
-      <svg className="w-5 h-3.5 rounded-sm shadow-sm inline-block" viewBox="0 0 9 6" style={{verticalAlign: 'middle'}}>
+      <svg className="w-5 h-3.5 rounded-xs shadow-xs inline-block" viewBox="0 0 9 6" style={{verticalAlign: 'middle'}}>
         <rect width="9" height="2" fill="#fff"/>
         <rect y="2" width="9" height="2" fill="#0039A6"/>
         <rect y="4" width="9" height="2" fill="#D52B1E"/>
       </svg>
     ),
     uk: (
-      <svg className="w-5 h-3.5 rounded-sm shadow-sm inline-block" viewBox="0 0 3 2" style={{verticalAlign: 'middle'}}>
+      <svg className="w-5 h-3.5 rounded-xs shadow-xs inline-block" viewBox="0 0 3 2" style={{verticalAlign: 'middle'}}>
         <rect width="3" height="1" fill="#0057B7"/>
         <rect y="1" width="3" height="1" fill="#FFD700"/>
       </svg>
@@ -75,7 +75,7 @@ export default function LanguageSelector() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 font-bold transition-all duration-200 cursor-pointer outline-none"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 font-bold transition-all duration-200 cursor-pointer outline-hidden"
       >
         <span className="text-xs leading-none">{flags[language]}</span>
         <span>{labels[language] || language.toUpperCase()}</span>

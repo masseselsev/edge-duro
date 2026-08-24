@@ -203,7 +203,7 @@ export default function StorageTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('filterByFilename')}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden focus:border-amber-500/50"
           />
         </div>
       </div>
@@ -271,11 +271,11 @@ export default function StorageTab() {
                       <td className="pl-3 pr-6 py-3.5 font-mono font-bold text-zinc-200">
                         <div className="flex items-center gap-2.5">
                           {art.format === 'iso' ? (
-                            <Disc size={16} className="text-amber-400 flex-shrink-0" />
+                            <Disc size={16} className="text-amber-400 shrink-0" />
                           ) : art.format === 'raw_xz' ? (
-                            <FileArchive size={16} className="text-emerald-400 flex-shrink-0" />
+                            <FileArchive size={16} className="text-emerald-400 shrink-0" />
                           ) : (
-                            <File size={16} className="text-cyan-400 flex-shrink-0" />
+                            <File size={16} className="text-cyan-400 shrink-0" />
                           )}
                           <span className="truncate max-w-md">{art.filename}</span>
                           {art.recipe?.distribution === 'armbian' && (
@@ -365,7 +365,7 @@ export default function StorageTab() {
                   setPage(1);
                   saveLimit('storage', val);
                 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-none focus:border-zinc-700 cursor-pointer"
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 focus:outline-hidden focus:border-zinc-700 cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -403,7 +403,7 @@ export default function StorageTab() {
 
       {/* Delete Single Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 animate-modal-in">
             <div className="flex items-center gap-3 text-rose-400">
               <div className="p-2.5 bg-rose-500/10 rounded-2xl border border-rose-500/20">
@@ -436,7 +436,7 @@ export default function StorageTab() {
 
       {/* Delete Bulk Confirmation Modal */}
       {isBulkDeleting && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 animate-modal-in">
             <div className="flex items-center gap-3 text-rose-400">
               <div className="p-2.5 bg-rose-500/10 rounded-2xl border border-rose-500/20">

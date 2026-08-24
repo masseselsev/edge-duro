@@ -57,7 +57,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter..."
-            className="w-full px-3 py-1.5 mb-2 bg-zinc-950 border border-zinc-800 rounded text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+            className="w-full px-3 py-1.5 mb-2 bg-zinc-950 border border-zinc-800 rounded-sm text-xs text-zinc-100 focus:outline-hidden focus:border-amber-500"
             autoFocus
           />
           <div className="max-h-48 overflow-y-auto space-y-1">

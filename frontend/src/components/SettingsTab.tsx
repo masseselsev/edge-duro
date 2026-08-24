@@ -127,7 +127,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
               type="text"
               value={serverName}
               onChange={(e) => setServerName(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden"
               required
             />
           </div>
@@ -146,7 +146,7 @@ export default function SettingsTab({ onSettingsUpdated }: SettingsTabProps) {
             <select
               value={logRetentionDays}
               onChange={(e) => setLogRetentionDays(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-none cursor-pointer"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-lg text-zinc-100 text-sm focus:outline-hidden cursor-pointer"
             >
               <option value={1}>1 Day (24 Hours)</option>
               <option value={3}>3 Days (Default / 72 Hours)</option>

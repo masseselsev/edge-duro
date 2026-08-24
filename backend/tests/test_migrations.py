@@ -45,7 +45,7 @@ def test_revision_chain_is_linear_and_complete():
     roots = [r for r, (_n, down, _s) in revs.items() if down is None]
     assert len(roots) == 1, f"expected exactly one root revision, got {roots}"
 
-    for rev, (name, down, _src) in revs.items():
+    for _rev, (name, down, _src) in revs.items():
         if down is not None:
             assert down in revs, f"{name}: down_revision '{down}' does not exist"
 
@@ -63,7 +63,7 @@ def test_schema_changes_go_through_the_idempotent_helpers():
     where it was, so the operations have to be state-checked.
     """
     raw = []
-    for rev, (name, _down, src) in _revisions().items():
+    for _rev, (name, _down, src) in _revisions().items():
         for op in ("op.add_column(", "op.create_table(", "op.create_index(",
                    "op.drop_column(", "op.drop_table(", "op.drop_index("):
             if op in src:

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Terminal, X, Circle, Download, CheckCircle2, Disc, ArrowDown, ArrowUp } from 'lucide-react';
+import { Terminal, X, Circle, Download, CheckCircle2, Disc, ArrowDown, ArrowUp, Cpu } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import { BOARDS } from './BoardSelector';
 
 interface BuildLogStreamProps {
   buildId: string;
@@ -33,6 +34,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
   const [hasRaw, setHasRaw] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
+  const [recipeInfo, setRecipeInfo] = useState<{ distribution?: string; board?: string } | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const isAutoScrollingRef = useRef<boolean>(false);
@@ -102,6 +104,9 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
         if (data.status) {
           setStatus(data.status);
         }
+        if (data.recipe) {
+          setRecipeInfo({ distribution: data.recipe.distribution, board: data.recipe.board });
+        }
         if (data.artifact_path) {
           setHasRaw(true);
         }
@@ -153,70 +158,87 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
       <div className="w-full max-w-5xl h-[85vh] bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
         
         {/* Header */}
-        <div className="p-4 px-6 border-b border-zinc-900 flex items-center justify-between bg-zinc-900/60">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
-              <Terminal size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-zinc-100">
-                  Build Console — {recipeName || buildId.slice(0, 8)}
-                </h3>
-                <span className={`flex items-center gap-1.5 text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${
-                  status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                  status === 'RUNNING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
-                  status === 'PENDING' ? 'bg-zinc-800 text-zinc-300 border-zinc-700' :
-                  'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                }`}>
-                  {status === 'SUCCESS' ? (
-                    <CheckCircle2 size={10} className="text-emerald-400" />
-                  ) : (
-                    <Circle
-                      size={8}
-                      className={
-                        status === 'RUNNING' || status === 'PENDING' ? 'text-amber-400 fill-amber-400 animate-pulse' :
-                        'text-rose-400 fill-rose-400'
-                      }
-                    />
-                  )}
-                  <span className="font-bold uppercase tracking-wider">{status}</span>
-                </span>
+        <div className="p-4 px-6 border-b border-zinc-900 bg-zinc-900/60 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl shrink-0">
+                <Terminal size={18} />
               </div>
-              <p className="text-[10px] text-zinc-500 font-mono">ID: {buildId}</p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-bold text-zinc-100 break-words">
+                    Build Console — {recipeName || buildId.slice(0, 8)}
+                  </h3>
+                  <span className={`shrink-0 flex items-center gap-1.5 text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${
+                    status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                    status === 'RUNNING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                    status === 'PENDING' ? 'bg-zinc-800 text-zinc-300 border-zinc-700' :
+                    'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  }`}>
+                    {status === 'SUCCESS' ? (
+                      <CheckCircle2 size={10} className="text-emerald-400" />
+                    ) : (
+                      <Circle
+                        size={8}
+                        className={
+                          status === 'RUNNING' || status === 'PENDING' ? 'text-amber-400 fill-amber-400 animate-pulse' :
+                          'text-rose-400 fill-rose-400'
+                        }
+                      />
+                    )}
+                    <span className="font-bold uppercase tracking-wider">{status}</span>
+                  </span>
+                  {recipeInfo?.distribution === 'armbian' && (
+                    <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono px-2.5 py-0.5 rounded-full border bg-zinc-800/60 text-zinc-300 border-zinc-700">
+                      <Cpu size={10} className="text-zinc-400" />
+                      {BOARDS.find((b) => b.id === recipeInfo.board)?.name || recipeInfo.board}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
+
+            <button
+              onClick={onClose}
+              className="shrink-0 p-1.5 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
           </div>
 
-          {/* Server Metrics Badge in Console Header */}
-          {metrics && (
-            <div className="hidden sm:flex items-center gap-2.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-2.5 py-1 shadow-inner text-[10px] font-mono">
-              <div className="flex items-center gap-1" title="CPU Utilization">
-                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">CPU</span>
-                <span className="font-semibold text-emerald-400">{metrics.cpu_usage.toFixed(0)}%</span>
-              </div>
-              <div className="w-px h-2.5 bg-zinc-800" />
-              <div className="flex items-center gap-1" title="RAM Utilization">
-                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RAM</span>
-                <span className="font-semibold text-emerald-400">{metrics.ram_usage.toFixed(0)}%</span>
-              </div>
-              <div className="w-px h-2.5 bg-zinc-800" />
-              <div className="flex items-center gap-1" title="Download Speed">
-                <ArrowDown size={11} className={metrics.rx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
-                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RX</span>
-                <span className="font-semibold text-emerald-400">{formatSpeed(metrics.rx_speed)}</span>
-                <span className="text-[8.5px] text-emerald-400">({metrics.rx_percent.toFixed(1)}%)</span>
-              </div>
-              <div className="w-px h-2.5 bg-zinc-800" />
-              <div className="flex items-center gap-1" title="Upload Speed">
-                <ArrowUp size={11} className={metrics.tx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
-                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">TX</span>
-                <span className="font-semibold text-emerald-400">{formatSpeed(metrics.tx_speed)}</span>
-                <span className="text-[8.5px] text-emerald-400">({metrics.tx_percent.toFixed(1)}%)</span>
-              </div>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[10px] text-zinc-500 font-mono">ID: {buildId}</p>
 
-          <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+            {/* Server Metrics Badge in Console Header */}
+            {metrics && (
+              <div className="hidden sm:flex items-center gap-2.5 bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-2.5 py-1 shadow-inner text-[10px] font-mono">
+                <div className="flex items-center gap-1" title="CPU Utilization">
+                  <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">CPU</span>
+                  <span className="font-semibold text-emerald-400">{metrics.cpu_usage.toFixed(0)}%</span>
+                </div>
+                <div className="w-px h-2.5 bg-zinc-800" />
+                <div className="flex items-center gap-1" title="RAM Utilization">
+                  <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RAM</span>
+                  <span className="font-semibold text-emerald-400">{metrics.ram_usage.toFixed(0)}%</span>
+                </div>
+                <div className="w-px h-2.5 bg-zinc-800" />
+                <div className="flex items-center gap-1" title="Download Speed">
+                  <ArrowDown size={11} className={metrics.rx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
+                  <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">RX</span>
+                  <span className="font-semibold text-emerald-400">{formatSpeed(metrics.rx_speed)}</span>
+                  <span className="text-[8.5px] text-emerald-400">({metrics.rx_percent.toFixed(1)}%)</span>
+                </div>
+                <div className="w-px h-2.5 bg-zinc-800" />
+                <div className="flex items-center gap-1" title="Upload Speed">
+                  <ArrowUp size={11} className={metrics.tx_speed > 1024 ? "text-emerald-400 animate-pulse" : "text-zinc-600"} />
+                  <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">TX</span>
+                  <span className="font-semibold text-emerald-400">{formatSpeed(metrics.tx_speed)}</span>
+                  <span className="text-[8.5px] text-emerald-400">({metrics.tx_percent.toFixed(1)}%)</span>
+                </div>
+              </div>
+            )}
+
             {hasRaw && (
               <a
                 href={`/api/builds/${buildId}/download?format=raw_xz`}
@@ -237,12 +259,7 @@ export default function BuildLogStream({ buildId, recipeName, onClose }: BuildLo
                 <span>ISO</span>
               </a>
             )}
-            <button
-              onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
-            >
-              <X size={20} />
-            </button>
+            </div>
           </div>
         </div>
 

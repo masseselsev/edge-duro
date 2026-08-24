@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Flame, X, Loader2, Check, Boxes } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BaseImageSelector from './BaseImageSelector';
+import BoardSelector from './BoardSelector';
 import PackageSelector from './PackageSelector';
 import AptRepoManager, { AptRepo } from './AptRepoManager';
 import AssetInjector from './AssetInjector';
@@ -332,6 +333,8 @@ export default function RecipeBuilderModal({ recipe, onClose, onSaveSuccess }: R
             }}
             onIgnoreMissingArchChange={setIgnoreMissingArch}
           />
+
+          <BoardSelector distribution={distribution} board={board} onChange={setBoard} />
 
           {/* Output Formats */}
           <div className="space-y-2">

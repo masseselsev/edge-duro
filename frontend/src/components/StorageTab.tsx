@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { HardDrive, Download, Trash2, RefreshCw, Loader2, Folder, Disc, FileArchive, File, CheckSquare, Square, AlertTriangle, FileText, Search, ChevronLeft, ChevronRight, Cpu } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeViewerModal from './RecipeViewerModal';
 import { getSavedLimit, saveLimit } from '../utils/storage';
+import { BOARDS } from './BoardSelector';
 
 interface Artifact {
   filename: string;
@@ -223,7 +224,7 @@ export default function StorageTab() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-800 bg-zinc-950/50 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="px-6 py-3.5 w-10 text-center">
+                  <th className="pl-4 pr-2 py-3.5 w-8 text-center">
                     <button
                       type="button"
                       onClick={toggleSelectAll}
@@ -236,7 +237,7 @@ export default function StorageTab() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-3.5">{t('filenameHeader')}</th>
+                  <th className="pl-3 pr-6 py-3.5">{t('filenameHeader')}</th>
                   <th className="px-6 py-3.5">{t('formatHeader')}</th>
                   <th className="px-6 py-3.5">{t('fileSizeHeader')}</th>
                   <th className="px-6 py-3.5">{t('lastModifiedHeader')}</th>
@@ -253,7 +254,7 @@ export default function StorageTab() {
                         isSelected ? 'bg-amber-500/5' : ''
                       }`}
                     >
-                      <td className="px-6 py-3.5 text-center">
+                      <td className="pl-4 pr-2 py-3.5 text-center">
                         <button
                           type="button"
                           onClick={() => toggleSelectFile(art.filename)}
@@ -267,7 +268,7 @@ export default function StorageTab() {
                         </button>
                       </td>
 
-                      <td className="px-6 py-3.5 font-mono font-bold text-zinc-200">
+                      <td className="pl-3 pr-6 py-3.5 font-mono font-bold text-zinc-200">
                         <div className="flex items-center gap-2.5">
                           {art.format === 'iso' ? (
                             <Disc size={16} className="text-amber-400 flex-shrink-0" />
@@ -277,6 +278,12 @@ export default function StorageTab() {
                             <File size={16} className="text-cyan-400 flex-shrink-0" />
                           )}
                           <span className="truncate max-w-md">{art.filename}</span>
+                          {art.recipe?.distribution === 'armbian' && (
+                            <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-zinc-800/60 text-zinc-400 border border-zinc-700">
+                              <Cpu size={9} />
+                              {BOARDS.find((b) => b.id === art.recipe.board)?.name || art.recipe.board}
+                            </span>
+                          )}
                         </div>
                       </td>
 

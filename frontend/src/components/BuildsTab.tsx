@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { History, Terminal, Download, XCircle, RefreshCw, Loader2, FileText, ChevronLeft, ChevronRight, Cpu } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import BuildLogStream from './BuildLogStream';
 import RecipeViewerModal from './RecipeViewerModal';
 import MissingPackagesModal from './MissingPackagesModal';
+import { BOARDS } from './BoardSelector';
 import { getSavedLimit, saveLimit } from '../utils/storage';
 
 export default function BuildsTab() {
@@ -97,7 +98,19 @@ export default function BuildsTab() {
               <tbody className="divide-y divide-zinc-800/50 text-xs">
                 {builds.map((build) => (
                   <tr key={build.id} className="hover:bg-zinc-800/30 transition-colors">
-                    <td className="px-6 py-3.5 font-mono text-zinc-300 font-bold">{build.id.slice(0, 8)}...</td>
+                    <td className="px-6 py-3.5 font-mono text-zinc-300 font-bold">
+                      <div className="flex items-center gap-2">
+                        <span>{build.id.slice(0, 8)}...</span>
+                        {build.recipe?.distribution === 'armbian' && (
+                          <span
+                            title={BOARDS.find((b) => b.id === build.recipe.board)?.name || build.recipe.board}
+                            className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-zinc-800/60 text-zinc-400 border border-zinc-700"
+                          >
+                            <Cpu size={10} />
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-3.5">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                         build.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle, XCircle, FlaskConical } from 'lucide-react';
+import { Plus, Play, Edit, Copy, Trash2, Flame, Loader2, Package, Cpu, Terminal, Circle, XCircle, FlaskConical, MemoryStick } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import RecipeBuilderModal from './RecipeBuilderModal';
+import { BOARDS } from './BoardSelector';
 
 interface RecipesTabProps {
   onBuildTriggered: (buildId: string, recipeName: string) => void;
@@ -199,6 +200,12 @@ export default function RecipesTab({ onBuildTriggered }: RecipesTabProps) {
                       <Cpu size={12} className="text-zinc-500" />
                       {recipe.architecture}
                     </span>
+                    {recipe.distribution === 'armbian' && (
+                      <span className="flex items-center gap-1 bg-zinc-950 text-zinc-400 px-2.5 py-1 rounded-lg border border-zinc-800">
+                        <MemoryStick size={12} className="text-zinc-500" />
+                        {BOARDS.find((b) => b.id === recipe.board)?.name || recipe.board}
+                      </span>
+                    )}
                     <span className="bg-zinc-950 text-zinc-400 px-2.5 py-1 rounded-lg border border-zinc-800">
                       {(recipe.output_formats || []).join(', ')}
                     </span>
